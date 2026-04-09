@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Controle de Cargas</title>
+  <meta name="description" content="Sistema de controle de cargas com cadastro, conferência e exportação."/>
+  <meta name="theme-color" content="#0d0f14"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- ══ HEADER ══════════════════════════════════════════════ -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">📦</div>
+        <div class="brand-text">
+          <span class="brand-name">Controle de Cargas</span>
+          <span class="brand-sub" id="dbStatusLabel">Sem conexão</span>
+        </div>
+      </div>
+      <button class="icon-btn" id="btnCfg" onclick="openModal('modalConfig')" title="Configurar Supabase">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      </button>
+    </div>
+    <!-- NAV TABS -->
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-btn active" data-tab="tabCadastro"    onclick="switchTab('tabCadastro')"    role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Cadastro
+      </button>
+      <button class="tab-btn" data-tab="tabConferencia" onclick="switchTab('tabConferencia')" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 20h.01M20 14h.01M20 20h.01M20 17h.01M17 14h.01"/></svg>
+        Conferência
+      </button>
+      <button class="tab-btn" data-tab="tabConsulta"   onclick="switchTab('tabConsulta')"   role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v4H3z"/><path d="M3 9h18M3 15h18M3 21h18"/></svg>
+        Consulta
+      </button>
+    </nav>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ══ TAB: CADASTRO ════════════════════════════════════ -->
+    <section id="tabCadastro" class="tab-panel active">
+      <div class="panel-header">
+        <h2 class="panel-title">Cadastrar Objeto</h2>
+        <p class="panel-desc">Registre um novo objeto aguardado para entrega.</p>
+      </div>
+
+      <form id="formCadastro" class="card form-card" onsubmit="cadastrarObjeto(event)" novalidate>
+
+        <div class="form-group">
+          <label class="form-label" for="inpCodigo">Código de Rastreio *</label>
+          <div class="input-with-action">
+            <input id="inpCodigo" class="form-input" type="text" placeholder="Ex: BR123456789BR" autocomplete="off" autocapitalize="characters" required/>
+            <button type="button" class="icon-btn-sm" onclick="openScannerCadastro()" title="Escanear código">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h5v5h-5z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="inpCliente">Nome do Cliente *</label>
+          <input id="inpCliente" class="form-input" type="text" list="listaClientes" placeholder="Digite ou selecione..." autocomplete="off" required/>
+          <datalist id="listaClientes"></datalist>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="inpTipo">Tipo de Serviço *</label>
+            <select id="inpTipo" class="form-select" required>
+              <option value="" disabled selected>Selecione...</option>
+              <option value="PAC">PAC</option>
+              <option value="SEDEX">SEDEX</option>
+              <option value="PAC MINI">PAC MINI</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inpData">Data Esperada *</label>
+            <input id="inpData" class="form-input" type="date" required/>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="btnCadastrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg>
+          Cadastrar Objeto
+        </button>
+      </form>
+
+      <!-- Lista rápida do dia -->
+      <div class="section-header">
+        <h3 class="section-title">Cadastros de Hoje</h3>
+        <span class="badge badge-blue" id="badgeHoje">0</span>
+      </div>
+      <div id="listaHoje" class="cards-list">
+        <div class="empty-card">
+          <span>Nenhum objeto cadastrado para hoje.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ TAB: CONFERÊNCIA ══════════════════════════════════ -->
+    <section id="tabConferencia" class="tab-panel" style="display:none">
+      <div class="panel-header">
+        <h2 class="panel-title">Conferência</h2>
+        <p class="panel-desc">Escaneie o código de barras para confirmar o recebimento.</p>
+      </div>
+
+      <!-- Status feedback -->
+      <div id="scanFeedback" class="scan-feedback scan-idle">
+        <div class="scan-feedback-icon" id="scanIcon">📷</div>
+        <div class="scan-feedback-title" id="scanTitle">Pronto para escanear</div>
+        <div class="scan-feedback-sub" id="scanSub">Posicione o código na câmera</div>
+      </div>
+
+      <!-- Camera viewer -->
+      <div class="scanner-wrap">
+        <div id="scannerViewport"></div>
+        <div class="scanner-overlay" id="scannerOverlay">
+          <div class="scanner-corner tl"></div>
+          <div class="scanner-corner tr"></div>
+          <div class="scanner-corner bl"></div>
+          <div class="scanner-corner br"></div>
+          <div class="scanner-line"></div>
+        </div>
+      </div>
+
+      <!-- Manual input fallback -->
+      <div class="card manual-scan-card">
+        <label class="form-label">Ou informe manualmente:</label>
+        <div class="input-with-action">
+          <input id="inpManual" class="form-input" type="text" placeholder="Digite o código de rastreio..." autocomplete="off" autocapitalize="characters"/>
+          <button class="btn btn-primary btn-sm" onclick="conferirManual()">OK</button>
+        </div>
+      </div>
+
+      <!-- Controles da câmera -->
+      <div class="scanner-controls">
+        <button class="btn btn-outline" id="btnIniciarCamera" onclick="toggleCamera()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          Iniciar Câmera
+        </button>
+        <button class="btn btn-ghost" id="btnTrocarCamera" onclick="trocarCamera()" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+          Trocar Câmera
+        </button>
+      </div>
+
+      <!-- Log de hoje -->
+      <div class="section-header">
+        <h3 class="section-title">Bipes Hoje</h3>
+        <button class="btn btn-ghost btn-xs" onclick="carregarLogHoje()">Atualizar</button>
+      </div>
+      <div id="logHoje" class="log-list">
+        <div class="empty-card"><span>Nenhuma conferência hoje.</span></div>
+      </div>
+    </section>
+
+    <!-- ══ TAB: CONSULTA ════════════════════════════════════ -->
+    <section id="tabConsulta" class="tab-panel" style="display:none">
+      <div class="panel-header">
+        <h2 class="panel-title">Consulta & Exportação</h2>
+        <p class="panel-desc">Selecione uma data para ver o relatório de objetos.</p>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="card filter-card">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Data</label>
+            <input id="filtroData" class="form-input" type="date" onchange="carregarConsulta()"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cliente</label>
+            <input id="filtroCliente" class="form-input" type="text" placeholder="Todos" oninput="renderConsulta()"/>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button class="btn btn-primary" onclick="exportarRelatorio()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar Relatório Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary pills -->
+      <div class="summary-pills" id="summaryPills" style="display:none">
+        <div class="pill pill-total">
+          <span class="pill-num" id="pillTotal">0</span>
+          <span class="pill-label">Total</span>
+        </div>
+        <div class="pill pill-green">
+          <span class="pill-num" id="pillPresente">0</span>
+          <span class="pill-label">Presentes</span>
+        </div>
+        <div class="pill pill-red">
+          <span class="pill-num" id="pillFaltando">0</span>
+          <span class="pill-label">Faltando</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="consultaResultados">
+        <div class="empty-card"><span>Selecione uma data para consultar.</span></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ══ MODAL: CONFIG ════════════════════════════════════════ -->
+  <div id="modalConfig" class="modal-overlay" style="display:none" onclick="closeModalBg(event,'modalConfig')">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 class="modal-title">🔐 Configurar Supabase</h3>
+        <button class="icon-btn-sm" onclick="closeModal('modalConfig')">✕</button>
+      </div>
+      <p class="modal-desc">Cole as credenciais do seu projeto Supabase:</p>
+      <div class="form-group">
+        <label class="form-label">Project URL</label>
+        <input id="cfgUrl" class="form-input" type="url" placeholder="https://xxxx.supabase.co"/>
+        <p class="form-hint">Settings → API → Project URL</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Anon Key</label>
+        <input id="cfgKey" class="form-input" type="text" placeholder="eyJhbGci..."/>
+        <p class="form-hint">Settings → API → anon public</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('modalConfig')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarConfig()">Conectar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MODAL: SCANNER CADASTRO ════════════════════════════ -->
+  <div id="modalScanCadastro" class="modal-overlay" style="display:none" onclick="closeModalBg(event,'modalScanCadastro')">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 class="modal-title">📷 Escanear Código</h3>
+        <button class="icon-btn-sm" onclick="fecharScannerCadastro()">✕</button>
+      </div>
+      <div id="scannerCadastroViewport" style="width:100%"></div>
+      <p class="modal-desc" style="margin-top:12px;text-align:center">Posicione o código na câmera</p>
+    </div>
+  </div>
+
+  <!-- ══ TOAST ════════════════════════════════════════════════ -->
+  <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- ══ LOADING ══════════════════════════════════════════════ -->
+  <div id="loadingOverlay" class="loading-overlay" style="display:none">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p id="loadingMsg">Carregando...</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
