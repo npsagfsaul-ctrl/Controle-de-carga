@@ -82,9 +82,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 function loadCfg() {
-  const url = localStorage.getItem('cc_sb_url');
-  const key = localStorage.getItem('cc_sb_key');
-  return url && key ? { url, key } : null;
+  const url = localStorage.getItem('cc_sb_url') || 'https://nouskkxjabjciadoseco.supabase.co';
+  const key = localStorage.getItem('cc_sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vdXNra3hqYWJqY2lhZG9zZWNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjEzMDYsImV4cCI6MjA5MTI5NzMwNn0.W_WMDTgb3d_0_gJksKc5Z8GIylyooUtJ8_utkPqzQXU';
+  return { url, key };
 }
 
 function salvarConfig() {
