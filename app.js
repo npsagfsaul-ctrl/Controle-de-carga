@@ -184,6 +184,21 @@ async function cadastrarObjeto(e) {
   btn.disabled = true;
   btn.textContent = 'Salvando...';
 
+  // Verifica duplicidade para o mesmo dia
+  const { data: existente } = await sb
+    .from('cargas')
+    .select('id')
+    .eq('codigo_rastreio', codigo)
+    .eq('data_agendada', data)
+    .limit(1);
+
+  if (existente && existente.length > 0) {
+    btn.disabled = false;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg> Cadastrar Objeto`;
+    showToast('⚠️ Este rastreio já está cadastrado para esta data!');
+    return;
+  }
+
   const { error } = await sb.from('cargas').insert({
     codigo_rastreio: codigo,
     cliente,
@@ -262,6 +277,7 @@ async function deletarCarga(id) {
   if (!confirm('Excluir este registro?')) return;
   await sb.from('cargas').delete().eq('id', id);
   carregarListaHoje();
+  carregarConsulta();
   showToast('🗑️ Excluído.');
 }
 
@@ -552,7 +568,7 @@ function renderConsulta() {
   }
   if (faltando.length) {
     html += `<div class="group-header faltando">❌ Faltando (${faltando.length})</div>`;
-    html += faltando.map(r => cargaCardHTML(r, false)).join('');
+    html += faltando.map(r => cargaCardHTML(r, true)).join('');
   }
 
   el.innerHTML = html;
