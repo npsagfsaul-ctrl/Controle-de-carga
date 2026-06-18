@@ -569,6 +569,79 @@ body {
   background: var(--border);
 }
 
+/* Client Groups (Accordion) */
+.client-group {
+  margin-bottom: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  transition: all var(--tr);
+}
+
+.client-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  list-style: none;
+  background: var(--bg-elevated);
+  transition: background var(--tr);
+}
+
+.client-summary::-webkit-details-marker {
+  display: none;
+}
+
+.client-summary:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.client-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.client-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+details[open] > .client-summary {
+  border-bottom: 1px solid var(--border);
+}
+
+details[open] > .client-summary .client-icon {
+  transform: rotate(90deg);
+}
+
+.client-content {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-card);
+}
+
+.client-content .carga-card {
+  border-radius: var(--r-sm);
+  background: var(--bg-input); /* Slight contrast from the outer container */
+}
+
 /* ── Empty Card ──────────────────────────────────────────── */
 .empty-card {
   background: var(--bg-card);

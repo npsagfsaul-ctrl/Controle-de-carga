@@ -560,15 +560,49 @@ function renderConsulta() {
     return;
   }
 
+  const renderClientGroup = (cliente, items, showDel) => {
+    return `
+      <details class="client-group">
+        <summary class="client-summary">
+          <div class="client-info">
+            <span style="font-size: 1.05rem">👤</span>
+            <span>${escHtml(cliente)}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="badge badge-blue">${items.length} ${items.length === 1 ? 'pacote' : 'pacotes'}</span>
+            <span class="client-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </span>
+          </div>
+        </summary>
+        <div class="client-content">
+          ${items.map(r => cargaCardHTML(r, showDel)).join('')}
+        </div>
+      </details>
+    `;
+  };
+
+  const groupItems = (items, showDel) => {
+    const map = {};
+    items.forEach(it => {
+      const c = it.cliente || 'Sem Cliente';
+      if (!map[c]) map[c] = [];
+      map[c].push(it);
+    });
+    return Object.keys(map).sort().map(cliente => renderClientGroup(cliente, map[cliente], showDel)).join('');
+  };
+
   let html = '';
 
   if (presentes.length) {
     html += `<div class="group-header presentes">✅ Presentes (${presentes.length})</div>`;
-    html += presentes.map(r => cargaCardHTML(r, false)).join('');
+    html += groupItems(presentes, false);
   }
   if (faltando.length) {
     html += `<div class="group-header faltando">❌ Faltando (${faltando.length})</div>`;
-    html += faltando.map(r => cargaCardHTML(r, true)).join('');
+    html += groupItems(faltando, true);
   }
 
   el.innerHTML = html;
