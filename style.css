@@ -403,18 +403,18 @@ body {
 
 .carga-status { flex-shrink: 0; }
 
-.del-btn {
+.edit-btn {
   background: transparent;
   border: none;
   color: var(--text-3);
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   border-radius: 4px;
   display: flex;
   transition: all var(--tr);
   flex-shrink: 0;
 }
-.del-btn:hover { background: var(--red-bg); color: var(--red); }
+.edit-btn:hover { background: var(--blue-bg); color: var(--blue); }
 
 /* ── Scanner ─────────────────────────────────────────────── */
 .scan-feedback {

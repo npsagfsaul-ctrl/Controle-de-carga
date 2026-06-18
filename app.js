@@ -267,18 +267,91 @@ function cargaCardHTML(r, showDel = false) {
       </div>
     </div>
     <span class="badge ${badgeCls} carga-status">${badgeTxt}</span>
-    ${showDel ? `<button class="del-btn" onclick="deletarCarga('${r.id}')" title="Excluir">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+    ${showDel ? `<button class="edit-btn" onclick="abrirEdicaoCarga('${r.id}')" title="Editar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
     </button>` : ''}
   </div>`;
 }
 
-async function deletarCarga(id) {
-  if (!confirm('Excluir este registro?')) return;
-  await sb.from('cargas').delete().eq('id', id);
+async function abrirEdicaoCarga(id) {
+  if (!sb) return;
+  showLoading(true, 'Carregando...');
+  const { data, error } = await sb.from('cargas').select('*').eq('id', id).single();
+  showLoading(false);
+  
+  if (error || !data) {
+    showToast('❌ Erro ao buscar dados do objeto.');
+    return;
+  }
+  
+  document.getElementById('editId').value = data.id;
+  document.getElementById('editCodigo').value = data.codigo_rastreio;
+  document.getElementById('editCliente').value = data.cliente;
+  document.getElementById('editTipo').value = data.tipo_servico;
+  document.getElementById('editData').value = data.data_agendada;
+  
+  openModal('modalEditarCarga');
+}
+
+async function salvarEdicao(e) {
+  e.preventDefault();
+  if (!sb) return;
+
+  const id = document.getElementById('editId').value;
+  const codigo = document.getElementById('editCodigo').value.trim().toUpperCase();
+  const cliente = document.getElementById('editCliente').value.trim();
+  const tipo = document.getElementById('editTipo').value;
+  const data = document.getElementById('editData').value;
+
+  if (!codigo || !cliente || !tipo || !data) {
+    showToast('⚠️ Preencha todos os campos.');
+    return;
+  }
+
+  const btn = document.getElementById('btnSalvarEdicao');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  const { error } = await sb.from('cargas').update({
+    codigo_rastreio: codigo,
+    cliente: cliente,
+    tipo_servico: tipo,
+    data_agendada: data
+  }).eq('id', id);
+
+  btn.disabled = false;
+  btn.textContent = 'Salvar';
+
+  if (error) {
+    showToast('❌ Erro ao atualizar: ' + error.message);
+    return;
+  }
+
+  showToast('✅ Objeto atualizado!');
+  closeModal('modalEditarCarga');
+  
   carregarListaHoje();
-  carregarConsulta();
-  showToast('🗑️ Excluído.');
+  if (document.getElementById('tabConsulta').style.display !== 'none') {
+    carregarConsulta();
+  }
+}
+
+async function confirmarExclusaoEdicao() {
+  const id = document.getElementById('editId').value;
+  if (!id) return;
+  
+  if (!confirm('Deseja realmente EXCLUIR este registro definitivamente?')) return;
+  
+  closeModal('modalEditarCarga');
+  showLoading(true, 'Excluindo...');
+  await sb.from('cargas').delete().eq('id', id);
+  showLoading(false);
+  
+  carregarListaHoje();
+  if (document.getElementById('tabConsulta').style.display !== 'none') {
+    carregarConsulta();
+  }
+  showToast('🗑️ Registro excluído.');
 }
 
 // ─── SCANNER PARA CADASTRO (modal) ───────────────────────────────────────────

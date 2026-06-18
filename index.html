@@ -253,6 +253,58 @@
     </div>
   </div>
 
+  <!-- ══ MODAL: EDITAR CARGA ══════════════════════════════════ -->
+  <div id="modalEditarCarga" class="modal-overlay" style="display:none" onclick="closeModalBg(event,'modalEditarCarga')">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 class="modal-title">✏️ Editar Objeto</h3>
+        <button class="icon-btn-sm" onclick="closeModal('modalEditarCarga')">✕</button>
+      </div>
+      
+      <form id="formEditarCarga" onsubmit="salvarEdicao(event)" novalidate>
+        <input type="hidden" id="editId" />
+        
+        <div class="form-group">
+          <label class="form-label" for="editCodigo">Código de Rastreio *</label>
+          <input id="editCodigo" class="form-input" type="text" autocomplete="off" autocapitalize="characters" required/>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="editCliente">Nome do Cliente *</label>
+          <input id="editCliente" class="form-input" type="text" list="listaClientes" autocomplete="off" required/>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="editTipo">Tipo de Serviço *</label>
+            <select id="editTipo" class="form-select" required>
+              <option value="" disabled>Selecione...</option>
+              <option value="PAC">PAC</option>
+              <option value="SEDEX">SEDEX</option>
+              <option value="PAC MINI">PAC MINI</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="editData">Data Esperada *</label>
+            <input id="editData" class="form-input" type="date" required/>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="justify-content: space-between; margin-top: 24px;">
+          <button type="button" class="btn btn-danger btn-sm" onclick="confirmarExclusaoEdicao()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            Excluir
+          </button>
+          
+          <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('modalEditarCarga')">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btnSalvarEdicao">Salvar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ══ TOAST ════════════════════════════════════════════════ -->
   <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
 
