@@ -175,10 +175,38 @@
       <!-- Filter bar -->
       <div class="card filter-card">
         <div class="form-row">
+
+          <!-- Calendário expansível -->
           <div class="form-group">
             <label class="form-label">Data</label>
-            <input id="filtroData" class="form-input" type="date" onchange="carregarConsulta()"/>
+            <div class="cal-wrapper" id="calWrapper">
+              <div class="cal-trigger" id="calTrigger" onclick="toggleCalendario()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span id="calValorExibido">Selecione uma data</span>
+                <svg class="cal-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </div>
+              <div class="cal-panel" id="calPanel" style="display:none">
+                <div class="cal-header">
+                  <button class="cal-nav-btn" onclick="mudarMesCalendario(-1)">&#8249;</button>
+                  <span class="cal-mes-ano" id="calMesAno"></span>
+                  <button class="cal-nav-btn" onclick="mudarMesCalendario(1)">&#8250;</button>
+                </div>
+                <div class="cal-semana">
+                  <span>Dom</span><span>Seg</span><span>Ter</span>
+                  <span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+                </div>
+                <div class="cal-dias" id="calDias"></div>
+                <div class="cal-legenda">
+                  <span class="cal-dot-green"></span> Dias com objetos
+                </div>
+              </div>
+            </div>
           </div>
+
           <div class="form-group">
             <label class="form-label">Cliente</label>
             <input id="filtroCliente" class="form-input" type="text" placeholder="Todos" oninput="renderConsulta()"/>
