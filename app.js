@@ -61,8 +61,13 @@ let clientesSugeridos = [];
 window.addEventListener('DOMContentLoaded', () => {
   // Set default dates to today
   const hoje = todayISO();
-  document.getElementById('inpData').value    = hoje;
-  document.getElementById('filtroData').value = hoje;
+  document.getElementById('inpData').value = hoje;
+
+  // Inicializa data selecionada na consulta como hoje
+  window._consultaDataSelecionada = hoje;
+
+  // Inicializa o calendário da consulta
+  inicializarCalendario();
 
   // Load config
   const cfg = loadCfg();
@@ -184,21 +189,7 @@ async function cadastrarObjeto(e) {
   btn.disabled = true;
   btn.textContent = 'Salvando...';
 
-  // Verifica duplicidade para o mesmo dia
-  const { data: existente } = await sb
-    .from('cargas')
-    .select('id')
-    .eq('codigo_rastreio', codigo)
-    .eq('data_agendada', data)
-    .limit(1);
-
-  if (existente && existente.length > 0) {
-    btn.disabled = false;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg> Cadastrar Objeto`;
-    showToast('⚠️ Este rastreio já está cadastrado para esta data!');
-    return;
-  }
-
+  // INSERT direto — a constraint UNIQUE no banco garante sem race condition
   const { error } = await sb.from('cargas').insert({
     codigo_rastreio: codigo,
     cliente,
@@ -210,7 +201,12 @@ async function cadastrarObjeto(e) {
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg> Cadastrar Objeto`;
 
   if (error) {
-    showToast('❌ Erro ao cadastrar: ' + error.message);
+    // 23505 = unique_violation (rastreio duplicado na mesma data)
+    if (error.code === '23505') {
+      showToast('⚠️ Rastreio ' + codigo + ' já cadastrado para esta data!');
+    } else {
+      showToast('❌ Erro ao cadastrar: ' + error.message);
+    }
     return;
   }
 
@@ -470,39 +466,57 @@ async function conferirManual() {
 async function processarConferencia(code) {
   if (!sb) { showToast('⚠️ Configure o Supabase.'); openModal('modalConfig'); return; }
 
-  const hoje = todayISO();
-
-  // Query for the code on today's date
+  // Busca o rastreio em qualquer data ainda pendente (não só hoje)
+  // Isso permite conferir objetos que chegaram atrasados ou adiantados
   const { data, error } = await sb
     .from('cargas')
     .select('*')
     .eq('codigo_rastreio', code)
-    .eq('data_agendada', hoje)
+    .eq('recebido', false)
+    .order('data_agendada', { ascending: true })
     .limit(1);
 
   if (error) { showToast('❌ Erro na consulta.'); return; }
 
   if (!data || !data.length) {
-    // Not registered for today
-    beep('error');
-    setFeedback('err', '❌', 'Não Cadastrado!', `Código: ${code} — Não encontrado para hoje.`);
-    logEntry({ code, ok: false, msg: 'Não cadastrado' });
-    showToast(`❌ ${code} — SEM REGISTRO para hoje`);
+    // Não encontrado como pendente — verifica se já foi recebido antes
+    const { data: jaRecebido } = await sb
+      .from('cargas')
+      .select('cliente, data_recebimento')
+      .eq('codigo_rastreio', code)
+      .eq('recebido', true)
+      .order('data_recebimento', { ascending: false })
+      .limit(1);
+
+    if (jaRecebido && jaRecebido.length) {
+      beep('error');
+      const dtReceb = formatDateBR(jaRecebido[0].data_recebimento?.slice(0,10) || '');
+      setFeedback('err', '⚠️', 'Já Conferido!', `${code} — ${jaRecebido[0].cliente} (recebido em ${dtReceb})`);
+      logEntry({ code, ok: false, msg: 'Já recebido' });
+      showToast(`⚠️ ${code} — Já foi conferido anteriormente`);
+    } else {
+      beep('error');
+      setFeedback('err', '❌', 'Não Cadastrado!', `Código: ${code} — Nenhum registro encontrado.`);
+      logEntry({ code, ok: false, msg: 'Não cadastrado' });
+      showToast(`❌ ${code} — SEM REGISTRO no sistema`);
+    }
     return;
   }
 
   const carga = data[0];
+  const hoje = todayISO();
+  const previsto = formatDateBR(carga.data_agendada);
 
-  if (carga.recebido) {
-    // Already received
-    beep('error');
-    setFeedback('err', '⚠️', 'Já Conferido!', `${code} — ${carga.cliente} (já recebido antes)`);
-    logEntry({ code, ok: false, msg: 'Já recebido' });
-    showToast(`⚠️ ${code} — Já foi conferido anteriormente`);
-    return;
+  // Avisa se está chegando fora da data prevista
+  if (carga.data_agendada !== hoje) {
+    const atrasado = carga.data_agendada < hoje;
+    const msg = atrasado
+      ? `Previsto para ${previsto} — chegou com atraso`
+      : `Previsto para ${previsto} — chegou adiantado`;
+    showToast(`ℹ️ ${code} — ${msg}`);
   }
 
-  // Mark as received
+  // Marca como recebido
   const { error: upErr } = await sb
     .from('cargas')
     .update({ recebido: true, data_recebimento: new Date().toISOString() })
@@ -511,11 +525,11 @@ async function processarConferencia(code) {
   if (upErr) { showToast('❌ Erro ao atualizar.'); return; }
 
   beep('success');
-  setFeedback('success', '✅', 'Recebido com Sucesso!', `${carga.cliente} — ${carga.tipo_servico}`);
-  logEntry({ code, ok: true, msg: carga.cliente });
+  setFeedback('success', '✅', 'Recebido com Sucesso!', `${carga.cliente} — ${carga.tipo_servico} (prev. ${previsto})`);
+  logEntry({ code, ok: true, msg: `${carga.cliente} (prev. ${previsto})` });
   showToast(`✅ ${code} — ${carga.cliente} confirmado!`);
 
-  // Refresh the cadastro list if it was loaded
+  // Atualiza log
   carregarLogHoje();
 }
 
@@ -589,9 +603,10 @@ function renderLogHoje() {
 
 // ─── CONSULTA ─────────────────────────────────────────────────────────────────
 let consultaData = [];
+let diasComDados = new Set(); // datas que têm objetos (para o calendário)
 
 async function carregarConsulta() {
-  const data  = document.getElementById('filtroData').value;
+  const data  = window._consultaDataSelecionada || '';
   const el    = document.getElementById('consultaResultados');
   const pills = document.getElementById('summaryPills');
 
@@ -610,6 +625,21 @@ async function carregarConsulta() {
 
   consultaData = rows || [];
   renderConsulta();
+}
+
+async function carregarDiasComDados(ano, mes) {
+  if (!sb) return;
+  // Busca todas as datas com registros no mês/ano informado
+  const inicio = `${ano}-${String(mes).padStart(2,'0')}-01`;
+  const fim    = `${ano}-${String(mes).padStart(2,'0')}-31`;
+  const { data } = await sb
+    .from('cargas')
+    .select('data_agendada')
+    .gte('data_agendada', inicio)
+    .lte('data_agendada', fim);
+  if (data) {
+    diasComDados = new Set(data.map(r => r.data_agendada));
+  }
 }
 
 function renderConsulta() {
@@ -730,6 +760,110 @@ function exportarRelatorio() {
   const filename = `conferencia_${data || 'sem-data'}.xlsx`;
   XLSX.writeFile(wb, filename);
   showToast('📥 Relatório exportado!');
+}
+
+
+// ─── CALENDÁRIO DA CONSULTA ───────────────────────────────────────────────────
+let _calAno, _calMes;
+
+function inicializarCalendario() {
+  const hoje = new Date();
+  _calAno = hoje.getFullYear();
+  _calMes = hoje.getMonth() + 1; // 1-indexed
+  renderCalendario();
+  document.addEventListener('click', (e) => {
+    const wrapper = document.getElementById('calWrapper');
+    if (wrapper && !wrapper.contains(e.target)) fecharCalendario();
+  });
+}
+
+function toggleCalendario() {
+  const panel = document.getElementById('calPanel');
+  if (!panel) return;
+  const aberto = panel.style.display !== 'none';
+  if (aberto) {
+    fecharCalendario();
+  } else {
+    panel.style.display = 'block';
+    document.getElementById('calTrigger').classList.add('open');
+    // Carrega dias com dados do mês atual
+    carregarDiasComDados(_calAno, _calMes).then(renderCalendario);
+  }
+}
+
+function fecharCalendario() {
+  const panel = document.getElementById('calPanel');
+  if (panel) panel.style.display = 'none';
+  const trigger = document.getElementById('calTrigger');
+  if (trigger) trigger.classList.remove('open');
+}
+
+function mudarMesCalendario(dir) {
+  _calMes += dir;
+  if (_calMes > 12) { _calMes = 1; _calAno++; }
+  if (_calMes < 1)  { _calMes = 12; _calAno--; }
+  carregarDiasComDados(_calAno, _calMes).then(renderCalendario);
+}
+
+function selecionarDiaCalendario(ano, mes, dia) {
+  const iso = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  window._consultaDataSelecionada = iso;
+
+  const [y, m, d] = iso.split('-');
+  const date = new Date(ano, mes - 1, dia);
+  const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const mesesNome = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const label = `${d}/${m}/${y} — ${diasSemana[date.getDay()]}`;
+
+  const el = document.getElementById('calValorExibido');
+  if (el) el.textContent = label;
+
+  fecharCalendario();
+  carregarConsulta();
+}
+
+function renderCalendario() {
+  const el = document.getElementById('calDias');
+  const header = document.getElementById('calMesAno');
+  if (!el || !header) return;
+
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                 'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  header.textContent = meses[_calMes - 1] + ' ' + _calAno;
+
+  const hoje = new Date();
+  const hojeStr = todayISO();
+  const selecionado = window._consultaDataSelecionada || '';
+
+  const primeiroDia = new Date(_calAno, _calMes - 1, 1).getDay();
+  const diasNoMes   = new Date(_calAno, _calMes, 0).getDate();
+  const diasNoAnterior = new Date(_calAno, _calMes - 1, 0).getDate();
+
+  let html = '';
+
+  // Dias do mês anterior
+  for (let i = primeiroDia - 1; i >= 0; i--) {
+    html += `<div class="cal-dia outro-mes">${diasNoAnterior - i}</div>`;
+  }
+
+  // Dias do mês atual
+  for (let d = 1; d <= diasNoMes; d++) {
+    const iso = `${_calAno}-${String(_calMes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    let cls = 'cal-dia';
+    if (iso === selecionado) cls += ' selecionado';
+    else if (iso === hojeStr) cls += ' hoje';
+    if (diasComDados.has(iso) && iso !== selecionado) cls += ' tem-dados';
+    html += `<div class="${cls}" onclick="selecionarDiaCalendario(${_calAno},${_calMes},${d})">${d}</div>`;
+  }
+
+  // Completar última linha
+  const total = primeiroDia + diasNoMes;
+  const resto = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= resto; d++) {
+    html += `<div class="cal-dia outro-mes">${d}</div>`;
+  }
+
+  el.innerHTML = html;
 }
 
 // ─── Modals ───────────────────────────────────────────────────────────────────
