@@ -780,3 +780,184 @@ details[open] > .client-summary .client-icon {
   .modal-overlay { align-items: center; }
   .modal-box { border-radius: var(--r-xl); padding: 32px; max-height: 90vh; }
 }
+
+/* ─── CALENDÁRIO DA CONSULTA ─────────────────────────────────────────────────── */
+.cal-wrapper {
+  position: relative;
+}
+
+.cal-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--text-1);
+  font-size: .92rem;
+  transition: border-color .15s;
+  user-select: none;
+}
+
+.cal-trigger:hover,
+.cal-trigger.open {
+  border-color: var(--accent);
+}
+
+.cal-trigger span {
+  flex: 1;
+}
+
+.cal-arrow {
+  transition: transform .2s;
+  color: var(--text-2);
+}
+
+.cal-trigger.open .cal-arrow {
+  transform: rotate(180deg);
+}
+
+.cal-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  background: var(--card-bg);
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  padding: 14px;
+  width: 280px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+  animation: calEntrar .15s ease;
+}
+
+@keyframes calEntrar {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cal-mes-ano {
+  font-weight: 600;
+  font-size: .92rem;
+  color: var(--text-1);
+}
+
+.cal-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 1.3rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  line-height: 1;
+  transition: background .1s, color .1s;
+}
+
+.cal-nav-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-1);
+}
+
+.cal-semana {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: .7rem;
+  color: var(--text-2);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.cal-dias {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cal-dia {
+  text-align: center;
+  padding: 6px 2px;
+  border-radius: 6px;
+  font-size: .82rem;
+  cursor: pointer;
+  color: var(--text-1);
+  transition: background .1s;
+  position: relative;
+}
+
+.cal-dia:hover {
+  background: var(--hover-bg);
+}
+
+.cal-dia.outro-mes {
+  color: var(--text-3, var(--text-2));
+  opacity: .35;
+  cursor: default;
+}
+
+.cal-dia.outro-mes:hover {
+  background: none;
+}
+
+.cal-dia.hoje {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cal-dia.selecionado {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.cal-dia.selecionado:hover {
+  background: var(--accent);
+}
+
+.cal-dia.tem-dados::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 4px;
+  background: var(--green, #22c55e);
+  border-radius: 50%;
+  margin: 1px auto 0;
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.cal-dia.selecionado.tem-dados::after {
+  background: rgba(255,255,255,.7);
+}
+
+.cal-legenda {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: .72rem;
+  color: var(--text-2);
+}
+
+.cal-dot-green {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--green, #22c55e);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── FIM CALENDÁRIO ──────────────────────────────────────────────────────────── */
