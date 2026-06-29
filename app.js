@@ -712,7 +712,7 @@ function renderConsulta() {
 }
 
 function exportarRelatorio() {
-  const data = document.getElementById('filtroData').value;
+  const data = window._consultaDataSelecionada || '';
   if (!consultaData.length) { showToast('Nenhum dado para exportar.'); return; }
 
   const presentes = consultaData.filter(r => r.recebido);
