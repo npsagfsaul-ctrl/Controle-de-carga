@@ -405,7 +405,7 @@ async function iniciarCamera() {
     btn.className = 'btn btn-danger';
     document.getElementById('btnTrocarCamera').style.display = allCameras.length > 1 ? 'flex' : 'none';
 
-    setFeedback('idle', '📷', 'Pronto para escanear', 'Mire a câmera no código de barras');
+    setFeedback('idle', '📷', 'Pronto para escanear', 'Posicione o código na câmera');
 
   } catch (err) {
     btn.textContent = 'Iniciar Câmera';
@@ -467,7 +467,6 @@ async function processarConferencia(code) {
   if (!sb) { showToast('⚠️ Configure o Supabase.'); openModal('modalConfig'); return; }
 
   // Busca o rastreio em qualquer data ainda pendente (não só hoje)
-  // Isso permite conferir objetos que chegaram atrasados ou adiantados
   const { data, error } = await sb
     .from('cargas')
     .select('*')
@@ -629,7 +628,6 @@ async function carregarConsulta() {
 
 async function carregarDiasComDados(ano, mes) {
   if (!sb) return;
-  // Busca todas as datas com registros no mês/ano informado
   const inicio = `${ano}-${String(mes).padStart(2,'0')}-01`;
   const fim    = `${ano}-${String(mes).padStart(2,'0')}-31`;
   const { data } = await sb
@@ -711,9 +709,20 @@ function renderConsulta() {
   el.innerHTML = html;
 }
 
+// ─── EXPORTAR RELATÓRIO EXCEL ─────────────────────────────────────────────────
 function exportarRelatorio() {
+  // Usa a data selecionada no calendário customizado
   const data = window._consultaDataSelecionada || '';
-  if (!consultaData.length) { showToast('Nenhum dado para exportar.'); return; }
+
+  if (!consultaData.length) {
+    showToast('⚠️ Nenhum dado para exportar. Selecione uma data com registros.');
+    return;
+  }
+
+  if (!window.XLSX) {
+    showToast('❌ Biblioteca Excel não carregada. Recarregue a página.');
+    return;
+  }
 
   const presentes = consultaData.filter(r => r.recebido);
   const faltando  = consultaData.filter(r => !r.recebido);
@@ -736,10 +745,10 @@ function exportarRelatorio() {
     return ws;
   }
 
-  // Combined sheet
+  // Aba combinada com todos os registros
   const allRows = [
     ...presentes.map(r => ({ ...r, _group: 'PRESENTE' })),
-    ...faltando.map(r => ({  ...r, _group: 'FALTANDO' })),
+    ...faltando.map(r =>  ({ ...r, _group: 'FALTANDO' })),
   ];
 
   const wsAll = XLSX.utils.json_to_sheet(allRows.map(r => ({
@@ -755,7 +764,7 @@ function exportarRelatorio() {
   XLSX.utils.book_append_sheet(wb, wsAll, 'Relatório Completo');
 
   if (presentes.length) XLSX.utils.book_append_sheet(wb, toSheet(presentes, 'PRESENTE'), 'Presentes');
-  if (faltando.length)  XLSX.utils.book_append_sheet(wb, toSheet(faltando, 'FALTANDO'),  'Faltando');
+  if (faltando.length)  XLSX.utils.book_append_sheet(wb, toSheet(faltando,  'FALTANDO'),  'Faltando');
 
   const filename = `conferencia_${data || 'sem-data'}.xlsx`;
   XLSX.writeFile(wb, filename);
@@ -812,7 +821,6 @@ function selecionarDiaCalendario(ano, mes, dia) {
   const [y, m, d] = iso.split('-');
   const date = new Date(ano, mes - 1, dia);
   const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
-  const mesesNome = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const label = `${d}/${m}/${y} — ${diasSemana[date.getDay()]}`;
 
   const el = document.getElementById('calValorExibido');
@@ -831,7 +839,6 @@ function renderCalendario() {
                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   header.textContent = meses[_calMes - 1] + ' ' + _calAno;
 
-  const hoje = new Date();
   const hojeStr = todayISO();
   const selecionado = window._consultaDataSelecionada || '';
 
