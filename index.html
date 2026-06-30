@@ -16,20 +16,6 @@
 </head>
 <body>
 
-  <!-- ══ LOGIN (senha de acesso) ═════════════════════════════ -->
-  <div id="loginOverlay" class="login-overlay">
-    <div class="login-box">
-      <div class="login-icon">📦</div>
-      <h1 class="login-title">Controle de Cargas</h1>
-      <p class="login-sub">Digite a senha para acessar</p>
-      <form id="formLogin" onsubmit="fazerLogin(event)" autocomplete="off">
-        <input id="inpSenha" class="form-input" type="password" placeholder="Senha" autocomplete="current-password"/>
-        <p id="loginErro" class="login-erro" style="display:none">🚫 Senha incorreta.</p>
-        <button type="submit" class="btn btn-primary btn-full">Entrar</button>
-      </form>
-    </div>
-  </div>
-
   <!-- ══ HEADER ══════════════════════════════════════════════ -->
   <header class="app-header">
     <div class="header-inner">
@@ -281,12 +267,9 @@
         <input id="cfgKey" class="form-input" type="text" placeholder="eyJhbGci..."/>
         <p class="form-hint">Settings → API → anon public</p>
       </div>
-      <div class="modal-actions" style="justify-content: space-between;">
-        <button class="btn btn-ghost btn-sm" onclick="sair()" title="Bloquear o sistema com senha">🔒 Sair</button>
-        <div style="display:flex; gap:10px;">
-          <button class="btn btn-ghost" onclick="closeModal('modalConfig')">Cancelar</button>
-          <button class="btn btn-primary" onclick="salvarConfig()">Conectar</button>
-        </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('modalConfig')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarConfig()">Conectar</button>
       </div>
     </div>
   </div>

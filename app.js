@@ -3,49 +3,6 @@
    Supabase + html5-qrcode + SheetJS + Web Audio API
    ============================================================ */
 
-// ─── Senha de acesso ──────────────────────────────────────────────────────────
-// ⚠️ TROQUE AQUI a senha de acesso ao sistema (e faça novo deploy):
-const SENHA_ACESSO = 'carga2026';
-
-function checarAuth() {
-  const liberado = localStorage.getItem('cc_auth') === SENHA_ACESSO;
-  const overlay  = document.getElementById('loginOverlay');
-  if (liberado) {
-    overlay.classList.add('hidden');
-    return true;
-  }
-  localStorage.removeItem('cc_auth');
-  overlay.classList.remove('hidden');
-  setTimeout(() => document.getElementById('inpSenha')?.focus(), 100);
-  return false;
-}
-
-function fazerLogin(e) {
-  e.preventDefault();
-  const inp = document.getElementById('inpSenha');
-  if (inp.value === SENHA_ACESSO) {
-    localStorage.setItem('cc_auth', SENHA_ACESSO);
-    document.getElementById('loginErro').style.display = 'none';
-    document.getElementById('loginOverlay').classList.add('hidden');
-    inp.value = '';
-    iniciarApp();
-  } else {
-    document.getElementById('loginErro').style.display = 'block';
-    inp.value = '';
-    inp.focus();
-  }
-}
-
-function sair() {
-  localStorage.removeItem('cc_auth');
-  closeModal('modalConfig');
-  const overlay = document.getElementById('loginOverlay');
-  overlay.classList.remove('hidden');
-  const inp = document.getElementById('inpSenha');
-  inp.value = '';
-  setTimeout(() => inp.focus(), 100);
-}
-
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 let sb = null;
 
@@ -120,8 +77,8 @@ window.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') conferirManual();
   });
 
-  // Só conecta e carrega dados se a senha já estiver liberada
-  if (checarAuth()) iniciarApp();
+  // Sem senha: conecta e carrega os dados direto
+  iniciarApp();
 });
 
 function iniciarApp() {
