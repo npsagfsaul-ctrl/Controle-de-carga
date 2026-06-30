@@ -160,14 +160,30 @@ function carregarTudo() {
 // ─── Clientes (lista fechada) ─────────────────────────────────────────────────
 async function carregarClientesSugeridos() {
   if (!sb) return;
-  const { data } = await sb
+  // Tenta a lista fechada (tabela clientes). Se a tabela não existir,
+  // deriva a lista dos clientes que já aparecem nos objetos cadastrados.
+  const { data, error } = await sb
     .from('clientes')
     .select('nome')
     .order('nome');
-  if (data) {
+  if (!error && data) {
     clientesSugeridos = data.map(r => r.nome);
-    atualizarDatalist();
+  } else {
+    clientesSugeridos = await clientesDeCargas();
   }
+  atualizarDatalist();
+}
+
+// Lista de clientes distintos extraída dos objetos já cadastrados (fallback)
+async function clientesDeCargas() {
+  const { data } = await sb.from('cargas').select('cliente');
+  if (!data) return [];
+  const mapa = new Map(); // chave em minúsculas → nome como foi digitado
+  data.forEach(r => {
+    const nome = (r.cliente || '').trim();
+    if (nome && !mapa.has(nome.toLowerCase())) mapa.set(nome.toLowerCase(), nome);
+  });
+  return [...mapa.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
 function atualizarDatalist() {
@@ -211,8 +227,13 @@ async function salvarCliente(e) {
   btn.disabled = false;
   btn.textContent = 'Cadastrar';
 
-  if (error) {
-    // Pode ser violação do índice único (ex.: cadastro simultâneo)
+  // Se a tabela 'clientes' não existe, segue no modo local (sem travar o fluxo).
+  // O cliente fica disponível agora e passa a persistir assim que houver um objeto dele.
+  const tabelaInexistente = error && (error.code === 'PGRST205' ||
+    /schema cache|public\.clientes|find the table/i.test(error.message || ''));
+
+  if (error && !tabelaInexistente) {
+    // Outro erro (ex.: violação do índice único em cadastro simultâneo)
     showToast('❌ Erro ao cadastrar cliente: ' + error.message);
     return;
   }
