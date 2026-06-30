@@ -16,6 +16,20 @@
 </head>
 <body>
 
+  <!-- ══ LOGIN (senha de acesso) ═════════════════════════════ -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-box">
+      <div class="login-icon">📦</div>
+      <h1 class="login-title">Controle de Cargas</h1>
+      <p class="login-sub">Digite a senha para acessar</p>
+      <form id="formLogin" onsubmit="fazerLogin(event)" autocomplete="off">
+        <input id="inpSenha" class="form-input" type="password" placeholder="Senha" autocomplete="current-password"/>
+        <p id="loginErro" class="login-erro" style="display:none">🚫 Senha incorreta.</p>
+        <button type="submit" class="btn btn-primary btn-full">Entrar</button>
+      </form>
+    </div>
+  </div>
+
   <!-- ══ HEADER ══════════════════════════════════════════════ -->
   <header class="app-header">
     <div class="header-inner">
@@ -69,8 +83,13 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="inpCliente">Nome do Cliente *</label>
-          <input id="inpCliente" class="form-input" type="text" list="listaClientes" placeholder="Digite ou selecione..." autocomplete="off" required/>
+          <label class="form-label" for="inpCliente">Cliente *</label>
+          <div class="input-with-action">
+            <input id="inpCliente" class="form-input" type="text" list="listaClientes" placeholder="Selecione um cliente cadastrado..." autocomplete="off" required/>
+            <button type="button" class="icon-btn-sm" onclick="abrirCadastroCliente()" title="Cadastrar novo cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+            </button>
+          </div>
           <datalist id="listaClientes"></datalist>
         </div>
 
@@ -234,10 +253,34 @@
         <input id="cfgKey" class="form-input" type="text" placeholder="eyJhbGci..."/>
         <p class="form-hint">Settings → API → anon public</p>
       </div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeModal('modalConfig')">Cancelar</button>
-        <button class="btn btn-primary" onclick="salvarConfig()">Conectar</button>
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button class="btn btn-ghost btn-sm" onclick="sair()" title="Bloquear o sistema com senha">🔒 Sair</button>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-ghost" onclick="closeModal('modalConfig')">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarConfig()">Conectar</button>
+        </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ MODAL: CADASTRAR CLIENTE ═══════════════════════════ -->
+  <div id="modalCadastrarCliente" class="modal-overlay" style="display:none" onclick="closeModalBg(event,'modalCadastrarCliente')">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 class="modal-title">👤 Novo Cliente</h3>
+        <button class="icon-btn-sm" onclick="closeModal('modalCadastrarCliente')">✕</button>
+      </div>
+      <p class="modal-desc">Cadastre o cliente uma única vez para evitar nomes duplicados.</p>
+      <form id="formCliente" onsubmit="salvarCliente(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="inpNovoCliente">Nome do Cliente *</label>
+          <input id="inpNovoCliente" class="form-input" type="text" placeholder="Ex: EMPRESA A" autocomplete="off" autofocus required/>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('modalCadastrarCliente')">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btnSalvarCliente">Cadastrar</button>
+        </div>
+      </form>
     </div>
   </div>
 

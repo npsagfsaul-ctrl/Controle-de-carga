@@ -3,6 +3,49 @@
    Supabase + html5-qrcode + SheetJS + Web Audio API
    ============================================================ */
 
+// ─── Senha de acesso ──────────────────────────────────────────────────────────
+// ⚠️ TROQUE AQUI a senha de acesso ao sistema (e faça novo deploy):
+const SENHA_ACESSO = 'carga2026';
+
+function checarAuth() {
+  const liberado = localStorage.getItem('cc_auth') === SENHA_ACESSO;
+  const overlay  = document.getElementById('loginOverlay');
+  if (liberado) {
+    overlay.classList.add('hidden');
+    return true;
+  }
+  localStorage.removeItem('cc_auth');
+  overlay.classList.remove('hidden');
+  setTimeout(() => document.getElementById('inpSenha')?.focus(), 100);
+  return false;
+}
+
+function fazerLogin(e) {
+  e.preventDefault();
+  const inp = document.getElementById('inpSenha');
+  if (inp.value === SENHA_ACESSO) {
+    localStorage.setItem('cc_auth', SENHA_ACESSO);
+    document.getElementById('loginErro').style.display = 'none';
+    document.getElementById('loginOverlay').classList.add('hidden');
+    inp.value = '';
+    iniciarApp();
+  } else {
+    document.getElementById('loginErro').style.display = 'block';
+    inp.value = '';
+    inp.focus();
+  }
+}
+
+function sair() {
+  localStorage.removeItem('cc_auth');
+  closeModal('modalConfig');
+  const overlay = document.getElementById('loginOverlay');
+  overlay.classList.remove('hidden');
+  const inp = document.getElementById('inpSenha');
+  inp.value = '';
+  setTimeout(() => inp.focus(), 100);
+}
+
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 let sb = null;
 
@@ -64,13 +107,6 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('inpData').value    = hoje;
   document.getElementById('filtroData').value = hoje;
 
-  // Load config
-  const cfg = loadCfg();
-  if (cfg) {
-    setDbStatus('connecting');
-    if (initSB(cfg.url, cfg.key)) verificarConexao();
-  }
-
   // Load clientes suggestion on input
   document.getElementById('inpCliente').addEventListener('input', atualizarDatalist);
 
@@ -78,7 +114,18 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('inpManual').addEventListener('keydown', e => {
     if (e.key === 'Enter') conferirManual();
   });
+
+  // Só conecta e carrega dados se a senha já estiver liberada
+  if (checarAuth()) iniciarApp();
 });
+
+function iniciarApp() {
+  const cfg = loadCfg();
+  if (cfg) {
+    setDbStatus('connecting');
+    if (initSB(cfg.url, cfg.key)) verificarConexao();
+  }
+}
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 function loadCfg() {
@@ -148,15 +195,15 @@ function carregarTudo() {
   carregarLogHoje();
 }
 
-// ─── Clientes (datalist) ──────────────────────────────────────────────────────
+// ─── Clientes (lista fechada) ─────────────────────────────────────────────────
 async function carregarClientesSugeridos() {
   if (!sb) return;
   const { data } = await sb
-    .from('cargas')
-    .select('cliente')
-    .order('cliente');
+    .from('clientes')
+    .select('nome')
+    .order('nome');
   if (data) {
-    clientesSugeridos = [...new Set(data.map(r => r.cliente))];
+    clientesSugeridos = data.map(r => r.nome);
     atualizarDatalist();
   }
 }
@@ -165,7 +212,59 @@ function atualizarDatalist() {
   const dl  = document.getElementById('listaClientes');
   const val = document.getElementById('inpCliente').value.toLowerCase();
   const filtered = clientesSugeridos.filter(c => c.toLowerCase().includes(val));
-  dl.innerHTML = filtered.slice(0, 10).map(c => `<option value="${escHtml(c)}"></option>`).join('');
+  dl.innerHTML = filtered.slice(0, 20).map(c => `<option value="${escHtml(c)}"></option>`).join('');
+}
+
+// Retorna o nome canônico cadastrado (comparação sem diferenciar maiúsc/minúsc)
+// ou null se o cliente não estiver na lista fechada.
+function resolverCliente(nome) {
+  const alvo = (nome || '').trim().toLowerCase();
+  if (!alvo) return null;
+  return clientesSugeridos.find(c => c.toLowerCase() === alvo) || null;
+}
+
+// ─── Cadastro de cliente (modal) ──────────────────────────────────────────────
+function abrirCadastroCliente() {
+  const atual = document.getElementById('inpCliente');
+  document.getElementById('inpNovoCliente').value = atual ? atual.value.trim() : '';
+  openModal('modalCadastrarCliente');
+  setTimeout(() => document.getElementById('inpNovoCliente').focus(), 100);
+}
+
+async function salvarCliente(e) {
+  e.preventDefault();
+  if (!sb) { showToast('⚠️ Configure o Supabase primeiro.'); return; }
+
+  const nome = document.getElementById('inpNovoCliente').value.trim();
+  if (!nome) { showToast('⚠️ Digite o nome do cliente.'); return; }
+
+  if (resolverCliente(nome)) { showToast('⚠️ Este cliente já está cadastrado.'); return; }
+
+  const btn = document.getElementById('btnSalvarCliente');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  const { error } = await sb.from('clientes').insert({ nome });
+
+  btn.disabled = false;
+  btn.textContent = 'Cadastrar';
+
+  if (error) {
+    // Pode ser violação do índice único (ex.: cadastro simultâneo)
+    showToast('❌ Erro ao cadastrar cliente: ' + error.message);
+    return;
+  }
+
+  clientesSugeridos.push(nome);
+  clientesSugeridos.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  atualizarDatalist();
+  closeModal('modalCadastrarCliente');
+  showToast('✅ Cliente cadastrado!');
+
+  // Se veio do formulário de cadastro de objeto, já preenche o campo
+  const inpCli = document.getElementById('inpCliente');
+  if (inpCli) inpCli.value = nome;
+  document.getElementById('inpNovoCliente').value = '';
 }
 
 // ─── CADASTRO ─────────────────────────────────────────────────────────────────
@@ -174,28 +273,36 @@ async function cadastrarObjeto(e) {
   if (!sb) { showToast('⚠️ Configure o Supabase primeiro.'); openModal('modalConfig'); return; }
 
   const codigo  = document.getElementById('inpCodigo').value.trim().toUpperCase();
-  const cliente = document.getElementById('inpCliente').value.trim();
   const tipo    = document.getElementById('inpTipo').value;
   const data    = document.getElementById('inpData').value;
 
-  if (!codigo || !cliente || !tipo || !data) { showToast('⚠️ Preencha todos os campos.'); return; }
+  // Cliente precisa estar na lista fechada (resolve a grafia cadastrada)
+  const cliente = resolverCliente(document.getElementById('inpCliente').value);
+
+  if (!codigo || !cliente || !tipo || !data) {
+    if (codigo && tipo && data && !cliente) {
+      showToast('⚠️ Cliente não cadastrado. Use o botão 👤 para cadastrar.');
+    } else {
+      showToast('⚠️ Preencha todos os campos.');
+    }
+    return;
+  }
 
   const btn = document.getElementById('btnCadastrar');
   btn.disabled = true;
   btn.textContent = 'Salvando...';
 
-  // Verifica duplicidade para o mesmo dia
+  // Verifica duplicidade em TODO o sistema (qualquer data)
   const { data: existente } = await sb
     .from('cargas')
-    .select('id')
+    .select('id, cliente, data_agendada')
     .eq('codigo_rastreio', codigo)
-    .eq('data_agendada', data)
     .limit(1);
 
   if (existente && existente.length > 0) {
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg> Cadastrar Objeto`;
-    showToast('⚠️ Este rastreio já está cadastrado para esta data!');
+    showToast(`⚠️ Código já cadastrado para ${existente[0].cliente} (data ${formatDateBR(existente[0].data_agendada)}).`);
     return;
   }
 
@@ -220,11 +327,6 @@ async function cadastrarObjeto(e) {
   document.getElementById('inpTipo').value    = '';
   document.getElementById('inpData').value    = todayISO();
 
-  // Refresh clients and list
-  if (!clientesSugeridos.includes(cliente)) {
-    clientesSugeridos.push(cliente);
-    clientesSugeridos.sort();
-  }
   carregarListaHoje();
 }
 
@@ -299,18 +401,37 @@ async function salvarEdicao(e) {
 
   const id = document.getElementById('editId').value;
   const codigo = document.getElementById('editCodigo').value.trim().toUpperCase();
-  const cliente = document.getElementById('editCliente').value.trim();
   const tipo = document.getElementById('editTipo').value;
   const data = document.getElementById('editData').value;
+  const cliente = resolverCliente(document.getElementById('editCliente').value);
 
   if (!codigo || !cliente || !tipo || !data) {
-    showToast('⚠️ Preencha todos os campos.');
+    if (codigo && tipo && data && !cliente) {
+      showToast('⚠️ Cliente não cadastrado. Use o botão 👤 para cadastrar.');
+    } else {
+      showToast('⚠️ Preencha todos os campos.');
+    }
     return;
   }
 
   const btn = document.getElementById('btnSalvarEdicao');
   btn.disabled = true;
   btn.textContent = 'Salvando...';
+
+  // Duplicidade global, ignorando o próprio registro
+  const { data: dup } = await sb
+    .from('cargas')
+    .select('id, cliente, data_agendada')
+    .eq('codigo_rastreio', codigo)
+    .neq('id', id)
+    .limit(1);
+
+  if (dup && dup.length > 0) {
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+    showToast(`⚠️ Já existe outro objeto com este código para ${dup[0].cliente} (data ${formatDateBR(dup[0].data_agendada)}).`);
+    return;
+  }
 
   const { error } = await sb.from('cargas').update({
     codigo_rastreio: codigo,
@@ -472,37 +593,45 @@ async function processarConferencia(code) {
 
   const hoje = todayISO();
 
-  // Query for the code on today's date
+  // Procura o código em QUALQUER data (não só hoje)
   const { data, error } = await sb
     .from('cargas')
     .select('*')
     .eq('codigo_rastreio', code)
-    .eq('data_agendada', hoje)
-    .limit(1);
+    .order('data_agendada', { ascending: true });
 
   if (error) { showToast('❌ Erro na consulta.'); return; }
 
   if (!data || !data.length) {
-    // Not registered for today
+    // Não existe no sistema
     beep('error');
-    setFeedback('err', '❌', 'Não Cadastrado!', `Código: ${code} — Não encontrado para hoje.`);
+    setFeedback('err', '❌', 'Não Cadastrado!', `Código: ${code} — não encontrado no sistema.`);
     logEntry({ code, ok: false, msg: 'Não cadastrado' });
-    showToast(`❌ ${code} — SEM REGISTRO para hoje`);
+    showToast(`❌ ${code} — SEM REGISTRO`);
     return;
   }
 
-  const carga = data[0];
+  // Objetos com esse código ainda não recebidos
+  const pendentes = data.filter(c => !c.recebido);
 
-  if (carga.recebido) {
-    // Already received
+  if (!pendentes.length) {
+    // Todos já foram recebidos
     beep('error');
-    setFeedback('err', '⚠️', 'Já Conferido!', `${code} — ${carga.cliente} (já recebido antes)`);
+    const ult = data[data.length - 1];
+    setFeedback('err', '⚠️', 'Já Conferido!', `${code} — ${ult.cliente} (já recebido antes)`);
     logEntry({ code, ok: false, msg: 'Já recebido' });
     showToast(`⚠️ ${code} — Já foi conferido anteriormente`);
     return;
   }
 
-  // Mark as received
+  // Prefere o agendado para hoje; senão, o pendente mais antigo
+  const carga = pendentes.find(c => c.data_agendada === hoje) || pendentes[0];
+
+  // Situação em relação à data esperada (datas ISO comparam corretamente)
+  let situacao = 'hoje';
+  if (carga.data_agendada > hoje)      situacao = 'antecipado'; // esperado pra frente, chegou antes
+  else if (carga.data_agendada < hoje) situacao = 'atrasado';   // esperado pra trás, chegou depois
+
   const { error: upErr } = await sb
     .from('cargas')
     .update({ recebido: true, data_recebimento: new Date().toISOString() })
@@ -511,11 +640,22 @@ async function processarConferencia(code) {
   if (upErr) { showToast('❌ Erro ao atualizar.'); return; }
 
   beep('success');
-  setFeedback('success', '✅', 'Recebido com Sucesso!', `${carga.cliente} — ${carga.tipo_servico}`);
-  logEntry({ code, ok: true, msg: carga.cliente });
-  showToast(`✅ ${code} — ${carga.cliente} confirmado!`);
+  const dataBR = formatDateBR(carga.data_agendada);
+  if (situacao === 'antecipado') {
+    setFeedback('success', '⚡', 'Antecipado!', `${carga.cliente} — era do dia ${dataBR}, chegou antes`);
+    logEntry({ code, ok: true, msg: `${carga.cliente} • ⚡ antecipado (era ${dataBR})` });
+    showToast(`⚡ ${code} — ${carga.cliente} ANTECIPADO (era de ${dataBR})`);
+  } else if (situacao === 'atrasado') {
+    setFeedback('success', '⏰', 'Atrasado!', `${carga.cliente} — era do dia ${dataBR}, chegou depois`);
+    logEntry({ code, ok: true, msg: `${carga.cliente} • ⏰ atrasado (era ${dataBR})` });
+    showToast(`⏰ ${code} — ${carga.cliente} ATRASADO (era de ${dataBR})`);
+  } else {
+    setFeedback('success', '✅', 'Recebido com Sucesso!', `${carga.cliente} — ${carga.tipo_servico}`);
+    logEntry({ code, ok: true, msg: carga.cliente });
+    showToast(`✅ ${code} — ${carga.cliente} confirmado!`);
+  }
 
-  // Refresh the cadastro list if it was loaded
+  // Atualiza o log do dia
   carregarLogHoje();
 }
 
@@ -633,16 +773,42 @@ function renderConsulta() {
     return;
   }
 
-  const renderClientGroup = (cliente, items, showDel) => {
+  // Agrupa por cliente e calcula o status (OK = todos os objetos do dia recebidos)
+  const map = {};
+  rows.forEach(it => {
+    const c = it.cliente || 'Sem Cliente';
+    if (!map[c]) map[c] = [];
+    map[c].push(it);
+  });
+
+  const grupos = Object.keys(map).map(cliente => {
+    const items     = map[cliente];
+    const recebidos = items.filter(i => i.recebido).length;
+    return { cliente, items, recebidos, total: items.length, ok: recebidos === items.length };
+  });
+
+  // Clientes com pendência primeiro; os OK por último. Dentro, ordem alfabética.
+  grupos.sort((a, b) => {
+    if (a.ok !== b.ok) return a.ok ? 1 : -1;
+    return a.cliente.localeCompare(b.cliente, 'pt-BR');
+  });
+
+  const clientesOk = grupos.filter(g => g.ok).length;
+
+  const renderClientGroup = (g) => {
+    const statusBadge = g.ok
+      ? `<span class="badge badge-green">✅ OK</span>`
+      : `<span class="badge badge-amber">⚠️ Faltam ${g.total - g.recebidos}</span>`;
     return `
-      <details class="client-group">
+      <details class="client-group" ${g.ok ? '' : 'open'}>
         <summary class="client-summary">
           <div class="client-info">
             <span style="font-size: 1.05rem">👤</span>
-            <span>${escHtml(cliente)}</span>
+            <span>${escHtml(g.cliente)}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <span class="badge badge-blue">${items.length} ${items.length === 1 ? 'pacote' : 'pacotes'}</span>
+            ${statusBadge}
+            <span class="badge badge-blue">${g.recebidos}/${g.total}</span>
             <span class="client-icon">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="9 18 15 12 9 6"></polyline>
@@ -651,32 +817,14 @@ function renderConsulta() {
           </div>
         </summary>
         <div class="client-content">
-          ${items.map(r => cargaCardHTML(r, showDel)).join('')}
+          ${g.items.map(r => cargaCardHTML(r, !r.recebido)).join('')}
         </div>
       </details>
     `;
   };
 
-  const groupItems = (items, showDel) => {
-    const map = {};
-    items.forEach(it => {
-      const c = it.cliente || 'Sem Cliente';
-      if (!map[c]) map[c] = [];
-      map[c].push(it);
-    });
-    return Object.keys(map).sort().map(cliente => renderClientGroup(cliente, map[cliente], showDel)).join('');
-  };
-
-  let html = '';
-
-  if (presentes.length) {
-    html += `<div class="group-header presentes">✅ Presentes (${presentes.length})</div>`;
-    html += groupItems(presentes, false);
-  }
-  if (faltando.length) {
-    html += `<div class="group-header faltando">❌ Faltando (${faltando.length})</div>`;
-    html += groupItems(faltando, true);
-  }
+  let html = `<div class="group-header">👥 Clientes OK: ${clientesOk}/${grupos.length}</div>`;
+  html += grupos.map(renderClientGroup).join('');
 
   el.innerHTML = html;
 }

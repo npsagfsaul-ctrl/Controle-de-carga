@@ -730,6 +730,36 @@ details[open] > .client-summary .client-icon {
 }
 
 /* ── Loading ─────────────────────────────────────────────── */
+/* ── Login (senha de acesso) ─────────────────────────────── */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.login-overlay.hidden { display: none; }
+
+.login-box {
+  width: 100%;
+  max-width: 340px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  padding: 36px 28px;
+  text-align: center;
+}
+.login-icon { font-size: 2.6rem; line-height: 1; }
+.login-title { font-size: 1.3rem; font-weight: 700; margin-top: 12px; }
+.login-sub { color: var(--text-2); font-size: 0.9rem; margin: 6px 0 22px; }
+.login-box form { display: flex; flex-direction: column; gap: 14px; }
+.login-box .form-input { text-align: center; }
+.login-erro { color: var(--red); font-size: 0.85rem; margin: -4px 0 0; }
+
 .loading-overlay {
   position: fixed;
   inset: 0;
