@@ -42,6 +42,15 @@
 
   --tab-h: 56px;
   --hdr-h: auto;
+
+  /* Apelidos para CSS vindo de outra convenção de nomes (ex.: calendário) */
+  --card-bg:      var(--bg-card);
+  --input-bg:     var(--bg-input);
+  --input-border: var(--border);
+  --border-2:     rgba(255,255,255,0.1);
+  --text-1:       var(--text);
+  --radius-md:    var(--r);
+  --hover-bg:     rgba(255,255,255,0.05);
 }
 
 html { scroll-behavior: smooth; font-size: 16px; }
