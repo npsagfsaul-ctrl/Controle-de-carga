@@ -604,9 +604,9 @@ async function processarConferencia(code) {
     if (jaRecebido && jaRecebido.length) {
       beep('error');
       const dtReceb = formatDateBR(jaRecebido[0].data_recebimento?.slice(0,10) || '');
-      setFeedback('err', '⚠️', 'Já Conferido!', `${code} — ${jaRecebido[0].cliente} (recebido em ${dtReceb})`);
-      logEntry({ code, ok: false, msg: 'Já recebido' });
-      showToast(`⚠️ ${code} — Já foi conferido anteriormente`);
+      setFeedback('err', '⚠️', 'Etiqueta já conferida!', `Possível objeto duplicado — esta etiqueta foi recebida em ${dtReceb} para ${jaRecebido[0].cliente}`);
+      logEntry({ code, ok: false, msg: `⚠️ etiqueta duplicada? (já recebida em ${dtReceb})` });
+      showToast(`⚠️ ${code} — ETIQUETA JÁ CONFERIDA (recebida ${dtReceb} • ${jaRecebido[0].cliente}). Possível duplicada!`);
     } else {
       beep('error');
       setFeedback('err', '❌', 'Não Cadastrado!', `Código: ${code} — Nenhum registro encontrado.`);
