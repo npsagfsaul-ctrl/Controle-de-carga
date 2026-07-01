@@ -69,9 +69,6 @@ window.addEventListener('DOMContentLoaded', () => {
   // Inicializa o calendário da consulta
   inicializarCalendario();
 
-  // Load clientes suggestion on input
-  document.getElementById('inpCliente').addEventListener('input', atualizarDatalist);
-
   // Enter key on manual scan
   document.getElementById('inpManual').addEventListener('keydown', e => {
     if (e.key === 'Enter') conferirManual();
@@ -171,7 +168,7 @@ async function carregarClientesSugeridos() {
   } else {
     clientesSugeridos = await clientesDeCargas();
   }
-  atualizarDatalist();
+  popularSelectsClientes();
 }
 
 // Lista de clientes distintos extraída dos objetos já cadastrados (fallback)
@@ -186,11 +183,23 @@ async function clientesDeCargas() {
   return [...mapa.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
-function atualizarDatalist() {
-  const dl  = document.getElementById('listaClientes');
-  const val = document.getElementById('inpCliente').value.toLowerCase();
-  const filtered = clientesSugeridos.filter(c => c.toLowerCase().includes(val));
-  dl.innerHTML = filtered.slice(0, 20).map(c => `<option value="${escHtml(c)}"></option>`).join('');
+// Popula os seletores fechados de cliente (cadastro e edição), preservando a seleção atual
+function popularSelectsClientes() {
+  const options = clientesSugeridos.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+
+  const selCadastro = document.getElementById('inpCliente');
+  if (selCadastro) {
+    const atual = selCadastro.value;
+    selCadastro.innerHTML = `<option value="" disabled ${atual ? '' : 'selected'}>Selecione um cliente cadastrado...</option>` + options;
+    if (atual && clientesSugeridos.includes(atual)) selCadastro.value = atual;
+  }
+
+  const selEdicao = document.getElementById('editCliente');
+  if (selEdicao) {
+    const atual = selEdicao.value;
+    selEdicao.innerHTML = `<option value="" disabled>Selecione um cliente cadastrado...</option>` + options;
+    if (atual && clientesSugeridos.includes(atual)) selEdicao.value = atual;
+  }
 }
 
 // Retorna o nome canônico cadastrado (comparação sem diferenciar maiúsc/minúsc)
@@ -203,8 +212,7 @@ function resolverCliente(nome) {
 
 // ─── Cadastro de cliente (modal) ──────────────────────────────────────────────
 function abrirCadastroCliente() {
-  const atual = document.getElementById('inpCliente');
-  document.getElementById('inpNovoCliente').value = atual ? atual.value.trim() : '';
+  document.getElementById('inpNovoCliente').value = '';
   openModal('modalCadastrarCliente');
   setTimeout(() => document.getElementById('inpNovoCliente').focus(), 100);
 }
@@ -240,7 +248,7 @@ async function salvarCliente(e) {
 
   clientesSugeridos.push(nome);
   clientesSugeridos.sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  atualizarDatalist();
+  popularSelectsClientes();
   closeModal('modalCadastrarCliente');
   showToast('✅ Cliente cadastrado!');
 
@@ -248,6 +256,67 @@ async function salvarCliente(e) {
   const inpCli = document.getElementById('inpCliente');
   if (inpCli) inpCli.value = nome;
   document.getElementById('inpNovoCliente').value = '';
+}
+
+// ─── Renomear / mesclar cliente ───────────────────────────────────────────────
+// Corrige divergências (ex.: "EMPRESA A" e "EMPRESA A (filial)" cadastrados
+// por engano como clientes diferentes) renomeando de uma vez TODOS os objetos
+// do cliente antigo. Se o novo nome já existir, os objetos passam a ficar
+// unificados sob esse nome (mesclagem).
+function abrirRenomearCliente(nomeAntigo) {
+  document.getElementById('renomeAntigoNome').value = nomeAntigo;
+  document.getElementById('renomeAntigoLabel').textContent = nomeAntigo;
+  document.getElementById('renomeNovoNome').value = nomeAntigo;
+  document.getElementById('listaClientesRenome').innerHTML =
+    clientesSugeridos.map(c => `<option value="${escHtml(c)}"></option>`).join('');
+  openModal('modalRenomearCliente');
+  setTimeout(() => document.getElementById('renomeNovoNome').focus(), 100);
+}
+
+async function confirmarRenomearCliente(e) {
+  e.preventDefault();
+  if (!sb) { showToast('⚠️ Configure o Supabase primeiro.'); return; }
+
+  const antigo = document.getElementById('renomeAntigoNome').value;
+  const novo   = document.getElementById('renomeNovoNome').value.trim();
+
+  if (!novo) { showToast('⚠️ Digite o nome correto do cliente.'); return; }
+  if (novo === antigo) { showToast('Nada para alterar — o nome já é esse.'); return; }
+
+  const mesclando = clientesSugeridos.some(c => c.toLowerCase() === novo.toLowerCase() && c !== antigo);
+  const confirmMsg = mesclando
+    ? `Confirma MESCLAR todos os objetos de "${antigo}" para o cliente já existente "${novo}"?\n\nIsso atualiza o histórico completo (todas as datas).`
+    : `Confirma renomear todos os objetos de "${antigo}" para "${novo}"?\n\nIsso atualiza o histórico completo (todas as datas).`;
+  if (!confirm(confirmMsg)) return;
+
+  const btn = document.getElementById('btnConfirmarRenomear');
+  btn.disabled = true;
+  btn.textContent = 'Atualizando...';
+
+  // Atualiza todos os objetos cadastrados com o nome antigo (correspondência exata)
+  const { error } = await sb.from('cargas').update({ cliente: novo }).eq('cliente', antigo);
+
+  // Melhor esforço: sincroniza a tabela 'clientes' se ela existir (ignora erros,
+  // pois a tabela pode não existir ou o nome novo já ter uma linha própria)
+  try {
+    const { error: upErr } = await sb.from('clientes').update({ nome: novo }).eq('nome', antigo);
+    if (upErr) await sb.from('clientes').delete().eq('nome', antigo);
+  } catch { /* tabela 'clientes' pode não existir — segue sem ela */ }
+
+  btn.disabled = false;
+  btn.textContent = 'Confirmar';
+
+  if (error) {
+    showToast('❌ Erro ao atualizar cliente: ' + error.message);
+    return;
+  }
+
+  closeModal('modalRenomearCliente');
+  showToast(mesclando ? `✅ Objetos mesclados em "${novo}"!` : `✅ Cliente renomeado para "${novo}"!`);
+
+  await carregarClientesSugeridos();
+  carregarListaHoje();
+  if (document.getElementById('tabConsulta').style.display !== 'none') carregarConsulta();
 }
 
 // ─── CADASTRO ─────────────────────────────────────────────────────────────────
@@ -813,6 +882,9 @@ function renderConsulta() {
           <div class="client-info">
             <span style="font-size: 1.05rem">👤</span>
             <span>${escHtml(g.cliente)}</span>
+            <button class="edit-btn" data-cliente="${escHtml(g.cliente)}" onclick="event.stopPropagation(); event.preventDefault(); abrirRenomearCliente(this.dataset.cliente)" title="Renomear / mesclar cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
             ${statusBadge}

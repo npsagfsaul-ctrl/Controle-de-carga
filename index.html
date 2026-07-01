@@ -71,12 +71,13 @@
         <div class="form-group">
           <label class="form-label" for="inpCliente">Cliente *</label>
           <div class="input-with-action">
-            <input id="inpCliente" class="form-input" type="text" list="listaClientes" placeholder="Selecione um cliente cadastrado..." autocomplete="off" required/>
+            <select id="inpCliente" class="form-select" required>
+              <option value="" disabled selected>Selecione um cliente cadastrado...</option>
+            </select>
             <button type="button" class="icon-btn-sm" onclick="abrirCadastroCliente()" title="Cadastrar novo cliente">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
             </button>
           </div>
-          <datalist id="listaClientes"></datalist>
         </div>
 
         <div class="form-row">
@@ -295,6 +296,29 @@
     </div>
   </div>
 
+  <!-- ══ MODAL: RENOMEAR / MESCLAR CLIENTE ══════════════════ -->
+  <div id="modalRenomearCliente" class="modal-overlay" style="display:none" onclick="closeModalBg(event,'modalRenomearCliente')">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 class="modal-title">✏️ Renomear / Mesclar Cliente</h3>
+        <button class="icon-btn-sm" onclick="closeModal('modalRenomearCliente')">✕</button>
+      </div>
+      <p class="modal-desc">Renomeando <strong id="renomeAntigoLabel"></strong>. Todos os objetos dele serão atualizados. Se digitar o nome de um cliente já existente, os dois são mesclados em um só.</p>
+      <form id="formRenomearCliente" onsubmit="confirmarRenomearCliente(event)" novalidate>
+        <input type="hidden" id="renomeAntigoNome"/>
+        <div class="form-group">
+          <label class="form-label" for="renomeNovoNome">Nome Correto *</label>
+          <input id="renomeNovoNome" class="form-input" type="text" list="listaClientesRenome" autocomplete="off" required/>
+          <datalist id="listaClientesRenome"></datalist>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('modalRenomearCliente')">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btnConfirmarRenomear">Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ══ MODAL: SCANNER CADASTRO ════════════════════════════ -->
   <div id="modalScanCadastro" class="modal-overlay" style="display:none" onclick="closeModalBg(event,'modalScanCadastro')">
     <div class="modal-box">
@@ -325,7 +349,9 @@
 
         <div class="form-group">
           <label class="form-label" for="editCliente">Nome do Cliente *</label>
-          <input id="editCliente" class="form-input" type="text" list="listaClientes" autocomplete="off" required/>
+          <select id="editCliente" class="form-select" required>
+            <option value="" disabled>Selecione um cliente cadastrado...</option>
+          </select>
         </div>
 
         <div class="form-row">
