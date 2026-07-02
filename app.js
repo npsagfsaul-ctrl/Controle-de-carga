@@ -416,7 +416,15 @@ async function carregarListaHoje() {
 function cargaCardHTML(r, showDel = false) {
   const st = r.recebido ? 'recebido' : 'pendente';
   const badgeCls = r.recebido ? 'badge-green' : 'badge-amber';
-  const badgeTxt = r.recebido ? '✓ Recebido' : '⏳ Aguardando';
+  let badgeTxt = r.recebido ? '✓ Recebido' : '⏳ Aguardando';
+
+  if (r.recebido && r.data_recebimento) {
+    const diaRecebido = r.data_recebimento.slice(0, 10); // YYYY-MM-DD
+    const dataCurta = diaRecebido.slice(8, 10) + '/' + diaRecebido.slice(5, 7);
+    if (diaRecebido > r.data_agendada)      badgeTxt = `⏰ Recebido ${dataCurta}`; // atrasado
+    else if (diaRecebido < r.data_agendada) badgeTxt = `⚡ Recebido ${dataCurta}`; // antecipado
+    else                                    badgeTxt = `✓ Recebido ${dataCurta}`; // no prazo
+  }
   return `<div class="carga-card ${st}">
     <div class="carga-info">
       <div class="carga-code">${escHtml(r.codigo_rastreio)}</div>
