@@ -69,6 +69,12 @@ window.addEventListener('DOMContentLoaded', () => {
   // Inicializa o calendário da consulta
   inicializarCalendario();
 
+  // Relatório por cliente: período padrão dos últimos 30 dias
+  const trintaDiasAtras = new Date();
+  trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+  document.getElementById('relDataInicio').value = trintaDiasAtras.toISOString().slice(0, 10);
+  document.getElementById('relDataFim').value = hoje;
+
   // Enter key on manual scan
   document.getElementById('inpManual').addEventListener('keydown', e => {
     if (e.key === 'Enter') conferirManual();
@@ -199,6 +205,13 @@ function popularSelectsClientes() {
     const atual = selEdicao.value;
     selEdicao.innerHTML = `<option value="" disabled>Selecione um cliente cadastrado...</option>` + options;
     if (atual && clientesSugeridos.includes(atual)) selEdicao.value = atual;
+  }
+
+  const selRelatorio = document.getElementById('relCliente');
+  if (selRelatorio) {
+    const atual = selRelatorio.value;
+    selRelatorio.innerHTML = `<option value="">Selecione um cliente...</option>` + options;
+    if (atual && clientesSugeridos.includes(atual)) selRelatorio.value = atual;
   }
 }
 
@@ -1079,6 +1092,125 @@ function renderCalendario() {
   }
 
   el.innerHTML = html;
+}
+
+// ─── RELATÓRIO POR CLIENTE ────────────────────────────────────────────────────
+let relatorioData = [];
+
+async function carregarRelatorioCliente() {
+  const cliente = document.getElementById('relCliente').value;
+  const el      = document.getElementById('relResultados');
+  const pills   = document.getElementById('relPills');
+
+  if (!cliente) {
+    el.innerHTML = '<div class="empty-card"><span>Selecione um cliente para ver o histórico.</span></div>';
+    pills.style.display = 'none';
+    relatorioData = [];
+    return;
+  }
+  if (!sb) { el.innerHTML = '<div class="empty-card"><span>Sem conexão com o banco.</span></div>'; return; }
+
+  const inicio = document.getElementById('relDataInicio').value;
+  const fim    = document.getElementById('relDataFim').value;
+
+  showLoading(true, 'Carregando histórico...');
+  let query = sb.from('cargas').select('*').eq('cliente', cliente).order('data_agendada', { ascending: false });
+  if (inicio) query = query.gte('data_agendada', inicio);
+  if (fim)    query = query.lte('data_agendada', fim);
+  const { data, error } = await query;
+  showLoading(false);
+
+  if (error) { el.innerHTML = '<div class="empty-card"><span>Erro ao consultar.</span></div>'; return; }
+
+  relatorioData = data || [];
+  renderRelatorioCliente();
+}
+
+function renderRelatorioCliente() {
+  const el    = document.getElementById('relResultados');
+  const pills = document.getElementById('relPills');
+  const rows  = relatorioData;
+
+  const presentes = rows.filter(r => r.recebido);
+  const faltando  = rows.filter(r => !r.recebido);
+
+  document.getElementById('relPillTotal').textContent    = rows.length;
+  document.getElementById('relPillPresente').textContent = presentes.length;
+  document.getElementById('relPillFaltando').textContent = faltando.length;
+  pills.style.display = rows.length ? 'grid' : 'none';
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-card"><span>Nenhum objeto encontrado neste período.</span></div>';
+    return;
+  }
+
+  // Agrupa por mês/ano da data agendada
+  const map = {};
+  rows.forEach(r => {
+    const mes = (r.data_agendada || '').slice(0, 7); // YYYY-MM
+    if (!map[mes]) map[mes] = [];
+    map[mes].push(r);
+  });
+
+  const mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                       'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const meses = Object.keys(map).sort().reverse();
+
+  el.innerHTML = meses.map((mes, idx) => {
+    const [ano, mesNum] = mes.split('-');
+    const label = `${mesesNomes[parseInt(mesNum, 10) - 1]} ${ano}`;
+    const items = map[mes];
+    const recebidosNoMes = items.filter(i => i.recebido).length;
+    return `
+      <details class="client-group" ${idx === 0 ? 'open' : ''}>
+        <summary class="client-summary">
+          <div class="client-info">
+            <span style="font-size: 1.05rem">📅</span>
+            <span>${escHtml(label)}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="badge badge-blue">${recebidosNoMes}/${items.length}</span>
+            <span class="client-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </span>
+          </div>
+        </summary>
+        <div class="client-content">
+          ${items.map(r => cargaCardHTML(r, !r.recebido)).join('')}
+        </div>
+      </details>
+    `;
+  }).join('');
+}
+
+async function relatorioVerTudo() {
+  document.getElementById('relDataInicio').value = '';
+  document.getElementById('relDataFim').value = '';
+  await carregarRelatorioCliente();
+}
+
+function exportarRelatorioCliente() {
+  const cliente = document.getElementById('relCliente').value;
+  if (!cliente) { showToast('⚠️ Selecione um cliente primeiro.'); return; }
+  if (!relatorioData.length) { showToast('Nenhum dado para exportar.'); return; }
+
+  const ws = XLSX.utils.json_to_sheet(relatorioData.map(r => ({
+    'Código de Rastreio': r.codigo_rastreio,
+    'Tipo de Serviço':    r.tipo_servico,
+    'Data Agendada':      formatDateBR(r.data_agendada),
+    'Recebido':           r.recebido ? 'Sim' : 'Não',
+    'Data Recebimento':   r.data_recebimento ? formatDateTime(r.data_recebimento) : '—',
+  })));
+  ws['!cols'] = [{wch:22},{wch:12},{wch:16},{wch:10},{wch:22}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Histórico');
+
+  const filename = `relatorio_${cliente.replace(/[^a-z0-9]+/gi, '_')}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  showToast('📥 Relatório exportado!');
 }
 
 // ─── Modals ───────────────────────────────────────────────────────────────────

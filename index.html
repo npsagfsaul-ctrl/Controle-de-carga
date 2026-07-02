@@ -44,6 +44,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v4H3z"/><path d="M3 9h18M3 15h18M3 21h18"/></svg>
         Consulta
       </button>
+      <button class="tab-btn" data-tab="tabRelatorio"  onclick="switchTab('tabRelatorio')"  role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+        Relatório
+      </button>
     </nav>
   </header>
 
@@ -245,6 +249,61 @@
       <!-- Results -->
       <div id="consultaResultados">
         <div class="empty-card"><span>Selecione uma data para consultar.</span></div>
+      </div>
+    </section>
+
+    <!-- ══ TAB: RELATÓRIO POR CLIENTE ═══════════════════════ -->
+    <section id="tabRelatorio" class="tab-panel" style="display:none">
+      <div class="panel-header">
+        <h2 class="panel-title">Relatório por Cliente</h2>
+        <p class="panel-desc">Veja tudo o que foi cadastrado para um cliente e o status de cada objeto.</p>
+      </div>
+
+      <div class="card filter-card">
+        <div class="form-group">
+          <label class="form-label" for="relCliente">Cliente</label>
+          <select id="relCliente" class="form-select" onchange="carregarRelatorioCliente()">
+            <option value="">Selecione um cliente...</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="relDataInicio">De</label>
+            <input id="relDataInicio" class="form-input" type="date" onchange="carregarRelatorioCliente()"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="relDataFim">Até</label>
+            <input id="relDataFim" class="form-input" type="date" onchange="carregarRelatorioCliente()"/>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button class="btn btn-ghost btn-sm" onclick="relatorioVerTudo()">Ver histórico completo</button>
+          <button class="btn btn-primary" onclick="exportarRelatorioCliente()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary pills -->
+      <div class="summary-pills" id="relPills" style="display:none">
+        <div class="pill pill-total">
+          <span class="pill-num" id="relPillTotal">0</span>
+          <span class="pill-label">Total</span>
+        </div>
+        <div class="pill pill-green">
+          <span class="pill-num" id="relPillPresente">0</span>
+          <span class="pill-label">Recebidos</span>
+        </div>
+        <div class="pill pill-red">
+          <span class="pill-num" id="relPillFaltando">0</span>
+          <span class="pill-label">Faltando</span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="relResultados">
+        <div class="empty-card"><span>Selecione um cliente para ver o histórico.</span></div>
       </div>
     </section>
 
