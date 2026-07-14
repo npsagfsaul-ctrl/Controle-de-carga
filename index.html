@@ -316,28 +316,32 @@
     <section id="tabImportar" class="tab-panel" style="display:none">
       <div class="panel-header">
         <h2 class="panel-title">Importar Foto</h2>
-        <p class="panel-desc">Envie a foto que o cliente mandou e receba só os códigos de rastreio.</p>
+        <p class="panel-desc">Envie as fotos que o cliente mandou e receba só os códigos de rastreio.</p>
       </div>
 
       <div class="card">
         <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" for="inpFotoOcr">Foto do Cliente</label>
-          <input id="inpFotoOcr" class="form-input" type="file" accept="image/*" onchange="carregarFotoParaCrop(event)"/>
+          <label class="form-label" for="inpFotoOcr">Fotos do Cliente</label>
+          <input id="inpFotoOcr" class="form-input" type="file" accept="image/*" multiple onchange="carregarFotoParaCrop(event)"/>
+          <p class="form-hint">Pode selecionar várias fotos de uma vez — o sistema mostra uma por vez pra recortar.</p>
         </div>
         <div id="ocrCropWrap" style="display:none; margin-top:12px;">
+          <p class="form-hint" id="ocrFilaProgresso" style="margin-bottom:4px; font-weight:700; color:var(--accent-2);"></p>
           <p class="form-hint" style="margin-bottom:8px;">📐 Arraste para selecionar só a área do código de rastreio — isso melhora muito a leitura.</p>
           <canvas id="ocrCanvas" style="width:100%; border-radius:var(--r-sm); touch-action:none; cursor:crosshair; display:block;"></canvas>
           <div class="filter-actions" style="margin-top:10px;">
             <button class="btn btn-primary btn-sm" id="btnProcessarSelecao" onclick="processarSelecaoOcr()" disabled>Processar Seleção</button>
             <button class="btn btn-ghost btn-sm" onclick="processarFotoInteiraOcr()">Usar Foto Inteira</button>
+            <button class="btn btn-ghost btn-sm" onclick="pularFotoOcr()">Pular Foto</button>
           </div>
         </div>
+        <div id="ocrFilaConcluida" class="empty-card" style="display:none; margin-top:12px;"></div>
       </div>
 
       <div id="ocrStatus" class="empty-card" style="display:none"><span>🔎 Lendo a imagem...</span></div>
 
       <div class="section-header" id="ocrResultsHeader" style="display:none">
-        <h3 class="section-title">Códigos Encontrados</h3>
+        <h3 class="section-title">Códigos Encontrados (<span id="ocrResultsCount">0</span>)</h3>
         <button class="btn btn-ghost btn-xs" onclick="copiarTodosCodigosOcr()">Copiar Todos</button>
       </div>
       <div id="ocrResultados" class="cards-list"></div>

@@ -1269,14 +1269,20 @@ function escHtml(s) {
 
 // ─── IMPORTAR FOTO (OCR) ───────────────────────────────────────────────────────
 // Extrai códigos de rastreio (padrão Correios: 2 letras + 9 números + 2 letras)
-// de uma foto enviada pelo cliente, usando OCR local (Tesseract.js).
+// de uma ou várias fotos enviadas pelo cliente, usando OCR local (Tesseract.js).
 //
 // Fotos reais costumam ter muito fundo/ruído ao redor da etiqueta, o que
 // prejudica o OCR. Por isso deixamos o usuário recortar (arrastar) só a área
 // do código antes de processar — o recorte também é ampliado (zoom), já que
 // texto pequeno é o principal motivo de falha do OCR.
-let ocrCodigosEncontrados = [];
-let ocrImagemOriginal = null; // objeto Image() com a foto em resolução original
+//
+// Várias fotos podem ser selecionadas de uma vez: elas entram numa fila,
+// mostradas uma a uma para recorte, e os códigos encontrados vão se
+// acumulando numa lista só até o fim da fila.
+let ocrCodigosAcumulados = new Set();
+let ocrFila         = [];   // File[] selecionados
+let ocrIndiceFila   = 0;    // posição atual na fila
+let ocrImagemOriginal = null; // objeto Image() com a foto atual em resolução original
 let ocrEscalaCanvas   = 1;    // pixels do canvas exibido ÷ pixels reais da imagem
 let ocrSelecao        = null; // {x,y,w,h} em pixels REAIS da imagem
 let ocrArrastando     = false;
@@ -1320,24 +1326,54 @@ function inicializarCropOcr() {
 }
 
 function carregarFotoParaCrop(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
+  const files = [...(e.target.files || [])];
+  if (!files.length) return;
 
-  ocrCodigosEncontrados = [];
+  ocrFila       = files;
+  ocrIndiceFila = 0;
+  ocrCodigosAcumulados = new Set();
   ocrSelecao = null;
+
   document.getElementById('ocrResultsHeader').style.display = 'none';
   document.getElementById('ocrResultados').innerHTML = '';
   document.getElementById('ocrTextoBrutoWrap').style.display = 'none';
   document.getElementById('ocrStatus').style.display = 'none';
+  document.getElementById('ocrFilaConcluida').style.display = 'none';
   document.getElementById('btnProcessarSelecao').disabled = true;
+  document.getElementById('ocrCropWrap').style.display = 'block';
+
+  carregarFotoAtualDaFila();
+}
+
+function carregarFotoAtualDaFila() {
+  const file = ocrFila[ocrIndiceFila];
+  ocrSelecao = null;
+  document.getElementById('btnProcessarSelecao').disabled = true;
+  document.getElementById('ocrFilaProgresso').textContent =
+    ocrFila.length > 1 ? `📷 Foto ${ocrIndiceFila + 1} de ${ocrFila.length}` : '';
 
   const img = new Image();
   img.onload = () => {
     ocrImagemOriginal = img;
-    document.getElementById('ocrCropWrap').style.display = 'block';
     redesenharCanvasOcr();
   };
   img.src = URL.createObjectURL(file);
+}
+
+function pularFotoOcr() {
+  avancarFilaOcr();
+}
+
+function avancarFilaOcr() {
+  ocrIndiceFila++;
+  if (ocrIndiceFila >= ocrFila.length) {
+    document.getElementById('ocrCropWrap').style.display = 'none';
+    const concl = document.getElementById('ocrFilaConcluida');
+    concl.style.display = 'flex';
+    concl.innerHTML = `<span>✅ Fila concluída — ${ocrFila.length} foto(s) processada(s), ${ocrCodigosAcumulados.size} código(s) no total.</span>`;
+    return;
+  }
+  carregarFotoAtualDaFila();
 }
 
 function redesenharCanvasOcr(x0, y0, x1, y1) {
@@ -1394,16 +1430,12 @@ async function processarFotoInteiraOcr() {
 
 async function executarOcr(blob) {
   const status  = document.getElementById('ocrStatus');
-  const header  = document.getElementById('ocrResultsHeader');
-  const results = document.getElementById('ocrResultados');
   const rawWrap = document.getElementById('ocrTextoBrutoWrap');
 
-  header.style.display  = 'none';
   rawWrap.style.display = 'none';
-  results.innerHTML = '';
-  ocrCodigosEncontrados = [];
   status.style.display = 'flex';
   status.innerHTML = '<span>🔎 Lendo a imagem...</span>';
+  document.getElementById('btnProcessarSelecao').disabled = true;
 
   try {
     const { data: { text } } = await Tesseract.recognize(blob, 'eng');
@@ -1411,34 +1443,50 @@ async function executarOcr(blob) {
     // Padrão dos Correios, tolerando espaços que o OCR às vezes insere entre os grupos
     const regex = /[A-Z]{2}\s*\d{9}\s*[A-Z]{2}/gi;
     const brutos = text.match(regex) || [];
-    const codigos = [...new Set(brutos.map(c => c.replace(/\s+/g, '').toUpperCase()))].sort();
+    const codigosNestaFoto = [...new Set(brutos.map(c => c.replace(/\s+/g, '').toUpperCase()))];
 
-    ocrCodigosEncontrados = codigos;
+    const antes = ocrCodigosAcumulados.size;
+    codigosNestaFoto.forEach(c => ocrCodigosAcumulados.add(c));
+    const novos = ocrCodigosAcumulados.size - antes;
+
     status.style.display = 'none';
-
     document.getElementById('ocrTextoBruto').textContent = text.trim() || '(nenhum texto reconhecido)';
     rawWrap.style.display = 'block';
 
-    if (!codigos.length) {
-      results.innerHTML = '<div class="empty-card"><span>Nenhum código de rastreio encontrado. Tente selecionar uma área menor, bem próxima do texto do código.</span></div>';
-      header.style.display = 'none';
-      return;
+    renderizarCodigosAcumulados();
+
+    if (codigosNestaFoto.length) {
+      showToast(`✅ ${novos} código(s) novo(s) encontrado(s)!`);
+    } else {
+      showToast('⚠️ Nenhum código encontrado nesta foto. Tente uma área menor, bem próxima do texto.');
     }
-
-    header.style.display = 'flex';
-    results.innerHTML = codigos.map(c => `
-      <div class="ocr-chip">
-        <span class="carga-code" style="flex:1">${escHtml(c)}</span>
-        <button class="btn btn-ghost btn-xs" onclick="copiarCodigoOcr('${c}')">Copiar</button>
-      </div>
-    `).join('');
-
-    showToast(`✅ ${codigos.length} código(s) encontrado(s)!`);
   } catch (err) {
     status.style.display = 'none';
-    results.innerHTML = '<div class="empty-card"><span>❌ Erro ao ler a imagem. Tente novamente.</span></div>';
     showToast('❌ Erro no OCR: ' + err.message);
   }
+
+  avancarFilaOcr();
+}
+
+function renderizarCodigosAcumulados() {
+  const header  = document.getElementById('ocrResultsHeader');
+  const results = document.getElementById('ocrResultados');
+  const codigos = [...ocrCodigosAcumulados].sort();
+
+  if (!codigos.length) {
+    header.style.display = 'none';
+    results.innerHTML = '';
+    return;
+  }
+
+  header.style.display = 'flex';
+  document.getElementById('ocrResultsCount').textContent = codigos.length;
+  results.innerHTML = codigos.map(c => `
+    <div class="ocr-chip">
+      <span class="carga-code" style="flex:1">${escHtml(c)}</span>
+      <button class="btn btn-ghost btn-xs" onclick="copiarCodigoOcr('${c}')">Copiar</button>
+    </div>
+  `).join('');
 }
 
 function copiarCodigoOcr(codigo) {
@@ -1446,7 +1494,8 @@ function copiarCodigoOcr(codigo) {
 }
 
 function copiarTodosCodigosOcr() {
-  if (!ocrCodigosEncontrados.length) return;
-  navigator.clipboard.writeText(ocrCodigosEncontrados.join('\n'))
-    .then(() => showToast(`📋 ${ocrCodigosEncontrados.length} código(s) copiado(s)!`));
+  const codigos = [...ocrCodigosAcumulados].sort();
+  if (!codigos.length) return;
+  navigator.clipboard.writeText(codigos.join('\n'))
+    .then(() => showToast(`📋 ${codigos.length} código(s) copiado(s)!`));
 }
