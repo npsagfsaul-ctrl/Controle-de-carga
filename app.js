@@ -1267,21 +1267,19 @@ function escHtml(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ─── IMPORTAR FOTO (OCR) ───────────────────────────────────────────────────────
+// ─── IMPORTAR FOTO ─────────────────────────────────────────────────────────────
 // Extrai códigos de rastreio (padrão Correios: 2 letras + 9 números + 2 letras)
-// de uma ou várias fotos enviadas pelo cliente, usando OCR local (Tesseract.js).
+// de uma ou várias fotos enviadas pelo cliente, tudo localmente no navegador.
 //
-// Fotos reais costumam ter muito fundo/ruído ao redor da etiqueta, o que
-// prejudica o OCR. Por isso deixamos o usuário recortar (arrastar) só a área
-// do código antes de processar — o recorte também é ampliado (zoom), já que
-// texto pequeno é o principal motivo de falha do OCR.
-//
-// Várias fotos podem ser selecionadas de uma vez: elas entram numa fila,
-// mostradas uma a uma para recorte, e os códigos encontrados vão se
-// acumulando numa lista só até o fim da fila.
+// Fluxo automático (sem interação): para cada foto tenta, nesta ordem:
+//   1. BarcodeDetector nativo do navegador (lê o código de barras da etiqueta)
+//   2. html5-qrcode em modo arquivo (mesma lib da aba Conferência)
+//   3. OCR da foto inteira (Tesseract.js)
+// Só as fotos em que as três tentativas falharem caem na fila de RECORTE
+// MANUAL, onde o usuário seleciona a área do código (ampliada 3x para o OCR).
 let ocrCodigosAcumulados = new Set();
-let ocrFila         = [];   // File[] selecionados
-let ocrIndiceFila   = 0;    // posição atual na fila
+let ocrFila         = [];   // File[] que precisaram de revisão manual
+let ocrIndiceFila   = 0;    // posição atual na fila manual
 let ocrImagemOriginal = null; // objeto Image() com a foto atual em resolução original
 let ocrEscalaCanvas   = 1;    // pixels do canvas exibido ÷ pixels reais da imagem
 let ocrSelecao        = null; // {x,y,w,h} em pixels REAIS da imagem
@@ -1325,24 +1323,92 @@ function inicializarCropOcr() {
   });
 }
 
-function carregarFotoParaCrop(e) {
+// Filtra do texto reconhecido apenas o que tem formato de rastreio dos Correios,
+// tolerando espaços que OCR/decodificadores às vezes inserem entre os grupos.
+function filtrarRastreios(texto) {
+  const brutos = (texto || '').match(/[A-Z]{2}\s*\d{9}\s*[A-Z]{2}/gi) || [];
+  return [...new Set(brutos.map(c => c.replace(/\s+/g, '').toUpperCase()))];
+}
+
+// Tenta extrair códigos de uma foto SEM interação do usuário.
+async function extrairCodigosAutomatico(file) {
+  // 1) Leitor de código de barras nativo do navegador (Chrome/Android)
+  try {
+    if ('BarcodeDetector' in window) {
+      const detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'itf', 'data_matrix', 'qr_code'] });
+      const bitmap = await createImageBitmap(file);
+      const achados = await detector.detect(bitmap);
+      bitmap.close?.();
+      const codigos = filtrarRastreios(achados.map(a => a.rawValue).join('\n'));
+      if (codigos.length) return codigos;
+    }
+  } catch { /* segue para a próxima tentativa */ }
+
+  // 2) html5-qrcode em modo arquivo (mesma lib que já lê essas etiquetas na Conferência)
+  try {
+    const scanner = new Html5Qrcode('ocrScanTemp');
+    try {
+      const res = await scanner.scanFileV2(file, false);
+      const codigos = filtrarRastreios(res?.decodedText || '');
+      if (codigos.length) return codigos;
+    } finally {
+      scanner.clear();
+    }
+  } catch { /* segue para a próxima tentativa */ }
+
+  // 3) OCR da foto inteira
+  try {
+    const { data: { text } } = await Tesseract.recognize(file, 'eng');
+    return filtrarRastreios(text);
+  } catch { return []; }
+}
+
+async function carregarFotoParaCrop(e) {
   const files = [...(e.target.files || [])];
   if (!files.length) return;
 
-  ocrFila       = files;
-  ocrIndiceFila = 0;
   ocrCodigosAcumulados = new Set();
-  ocrSelecao = null;
+  ocrFila       = [];
+  ocrIndiceFila = 0;
+  ocrSelecao    = null;
 
+  const status = document.getElementById('ocrStatus');
   document.getElementById('ocrResultsHeader').style.display = 'none';
   document.getElementById('ocrResultados').innerHTML = '';
   document.getElementById('ocrTextoBrutoWrap').style.display = 'none';
-  document.getElementById('ocrStatus').style.display = 'none';
   document.getElementById('ocrFilaConcluida').style.display = 'none';
+  document.getElementById('ocrCropWrap').style.display = 'none';
   document.getElementById('btnProcessarSelecao').disabled = true;
-  document.getElementById('ocrCropWrap').style.display = 'block';
+  status.style.display = 'flex';
 
-  carregarFotoAtualDaFila();
+  // Passo automático: processa todas as fotos sem interação
+  for (let i = 0; i < files.length; i++) {
+    status.innerHTML = `<span>🔎 Lendo foto ${i + 1} de ${files.length}... (${ocrCodigosAcumulados.size} código(s) até agora)</span>`;
+    const codigos = await extrairCodigosAutomatico(files[i]);
+    if (codigos.length) {
+      codigos.forEach(c => ocrCodigosAcumulados.add(c));
+      renderizarCodigosAcumulados();
+    } else {
+      ocrFila.push(files[i]); // não conseguiu sozinho — vai para revisão manual
+    }
+  }
+
+  status.style.display = 'none';
+
+  if (ocrFila.length) {
+    showToast(`✅ ${ocrCodigosAcumulados.size} código(s) lidos automaticamente. ${ocrFila.length} foto(s) precisam de recorte manual.`);
+    document.getElementById('ocrCropWrap').style.display = 'block';
+    carregarFotoAtualDaFila();
+  } else {
+    mostrarFilaConcluida(files.length);
+  }
+}
+
+function mostrarFilaConcluida(totalFotos) {
+  document.getElementById('ocrCropWrap').style.display = 'none';
+  const concl = document.getElementById('ocrFilaConcluida');
+  concl.style.display = 'flex';
+  concl.innerHTML = `<span>✅ Concluído — ${totalFotos} foto(s) processada(s), ${ocrCodigosAcumulados.size} código(s) no total.</span>`;
 }
 
 function carregarFotoAtualDaFila() {
@@ -1350,7 +1416,7 @@ function carregarFotoAtualDaFila() {
   ocrSelecao = null;
   document.getElementById('btnProcessarSelecao').disabled = true;
   document.getElementById('ocrFilaProgresso').textContent =
-    ocrFila.length > 1 ? `📷 Foto ${ocrIndiceFila + 1} de ${ocrFila.length}` : '';
+    `✋ Revisão manual — foto ${ocrIndiceFila + 1} de ${ocrFila.length} (a leitura automática não encontrou o código)`;
 
   const img = new Image();
   img.onload = () => {
@@ -1370,7 +1436,7 @@ function avancarFilaOcr() {
     document.getElementById('ocrCropWrap').style.display = 'none';
     const concl = document.getElementById('ocrFilaConcluida');
     concl.style.display = 'flex';
-    concl.innerHTML = `<span>✅ Fila concluída — ${ocrFila.length} foto(s) processada(s), ${ocrCodigosAcumulados.size} código(s) no total.</span>`;
+    concl.innerHTML = `<span>✅ Revisão concluída — ${ocrCodigosAcumulados.size} código(s) no total.</span>`;
     return;
   }
   carregarFotoAtualDaFila();
@@ -1439,11 +1505,7 @@ async function executarOcr(blob) {
 
   try {
     const { data: { text } } = await Tesseract.recognize(blob, 'eng');
-
-    // Padrão dos Correios, tolerando espaços que o OCR às vezes insere entre os grupos
-    const regex = /[A-Z]{2}\s*\d{9}\s*[A-Z]{2}/gi;
-    const brutos = text.match(regex) || [];
-    const codigosNestaFoto = [...new Set(brutos.map(c => c.replace(/\s+/g, '').toUpperCase()))];
+    const codigosNestaFoto = filtrarRastreios(text);
 
     const antes = ocrCodigosAcumulados.size;
     codigosNestaFoto.forEach(c => ocrCodigosAcumulados.add(c));

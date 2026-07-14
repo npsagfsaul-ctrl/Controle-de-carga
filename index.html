@@ -323,10 +323,11 @@
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" for="inpFotoOcr">Fotos do Cliente</label>
           <input id="inpFotoOcr" class="form-input" type="file" accept="image/*" multiple onchange="carregarFotoParaCrop(event)"/>
-          <p class="form-hint">Pode selecionar várias fotos de uma vez — o sistema mostra uma por vez pra recortar.</p>
+          <p class="form-hint">Selecione todas as fotos de uma vez — a leitura é automática (código de barras + texto). Só as fotos que falharem pedem recorte manual.</p>
         </div>
+        <div id="ocrScanTemp" style="display:none"></div>
         <div id="ocrCropWrap" style="display:none; margin-top:12px;">
-          <p class="form-hint" id="ocrFilaProgresso" style="margin-bottom:4px; font-weight:700; color:var(--accent-2);"></p>
+          <p class="form-hint" id="ocrFilaProgresso" style="margin-bottom:4px; font-weight:700; color:var(--amber);"></p>
           <p class="form-hint" style="margin-bottom:8px;">📐 Arraste para selecionar só a área do código de rastreio — isso melhora muito a leitura.</p>
           <canvas id="ocrCanvas" style="width:100%; border-radius:var(--r-sm); touch-action:none; cursor:crosshair; display:block;"></canvas>
           <div class="filter-actions" style="margin-top:10px;">
