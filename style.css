@@ -1000,3 +1000,28 @@ details[open] > .client-summary .client-icon {
 }
 
 /* ─── FIM CALENDÁRIO ──────────────────────────────────────────────────────────── */
+
+/* ── OCR (Importar Foto) ─────────────────────────────────────────────────── */
+.ocr-raw-text {
+  white-space: pre-wrap;
+  font-size: 0.75rem;
+  color: var(--text-2);
+  background: var(--bg-input);
+  padding: 10px;
+  border-radius: var(--r-sm);
+  margin-top: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.ocr-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ocr-chip .carga-code { font-size: 0.95rem; }

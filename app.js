@@ -1263,3 +1263,75 @@ function escHtml(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+
+// ─── IMPORTAR FOTO (OCR) ───────────────────────────────────────────────────────
+// Extrai códigos de rastreio (padrão Correios: 2 letras + 9 números + 2 letras)
+// de uma foto enviada pelo cliente, usando OCR local (Tesseract.js).
+let ocrCodigosEncontrados = [];
+
+async function processarFotoOcr(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  // Prévia da imagem
+  const preview = document.getElementById('ocrPreview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+
+  const status  = document.getElementById('ocrStatus');
+  const header  = document.getElementById('ocrResultsHeader');
+  const results = document.getElementById('ocrResultados');
+  const rawWrap = document.getElementById('ocrTextoBrutoWrap');
+
+  header.style.display  = 'none';
+  rawWrap.style.display = 'none';
+  results.innerHTML = '';
+  ocrCodigosEncontrados = [];
+  status.style.display = 'flex';
+  status.innerHTML = '<span>🔎 Lendo a imagem...</span>';
+
+  try {
+    const { data: { text } } = await Tesseract.recognize(file, 'eng');
+
+    // Padrão dos Correios, tolerando espaços que o OCR às vezes insere entre os grupos
+    const regex = /[A-Z]{2}\s*\d{9}\s*[A-Z]{2}/gi;
+    const brutos = text.match(regex) || [];
+    const codigos = [...new Set(brutos.map(c => c.replace(/\s+/g, '').toUpperCase()))].sort();
+
+    ocrCodigosEncontrados = codigos;
+    status.style.display = 'none';
+
+    document.getElementById('ocrTextoBruto').textContent = text.trim() || '(nenhum texto reconhecido)';
+    rawWrap.style.display = 'block';
+
+    if (!codigos.length) {
+      results.innerHTML = '<div class="empty-card"><span>Nenhum código de rastreio encontrado nesta foto. Tente uma foto mais nítida.</span></div>';
+      header.style.display = 'none';
+      return;
+    }
+
+    header.style.display = 'flex';
+    results.innerHTML = codigos.map(c => `
+      <div class="ocr-chip">
+        <span class="carga-code" style="flex:1">${escHtml(c)}</span>
+        <button class="btn btn-ghost btn-xs" onclick="copiarCodigoOcr('${c}')">Copiar</button>
+      </div>
+    `).join('');
+
+    showToast(`✅ ${codigos.length} código(s) encontrado(s)!`);
+  } catch (err) {
+    status.style.display = 'none';
+    results.innerHTML = '<div class="empty-card"><span>❌ Erro ao ler a imagem. Tente novamente.</span></div>';
+    showToast('❌ Erro no OCR: ' + err.message);
+  }
+}
+
+function copiarCodigoOcr(codigo) {
+  navigator.clipboard.writeText(codigo).then(() => showToast(`📋 ${codigo} copiado!`));
+}
+
+function copiarTodosCodigosOcr() {
+  if (!ocrCodigosEncontrados.length) return;
+  navigator.clipboard.writeText(ocrCodigosEncontrados.join('\n'))
+    .then(() => showToast(`📋 ${ocrCodigosEncontrados.length} código(s) copiado(s)!`));
+}
