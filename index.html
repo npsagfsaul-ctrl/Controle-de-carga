@@ -12,7 +12,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -48,10 +47,6 @@
       <button class="tab-btn" data-tab="tabRelatorio"  onclick="switchTab('tabRelatorio')"  role="tab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
         Relatório
-      </button>
-      <button class="tab-btn" data-tab="tabImportar"   onclick="switchTab('tabImportar')"   role="tab">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        Importar
       </button>
     </nav>
   </header>
@@ -310,47 +305,6 @@
       <div id="relResultados">
         <div class="empty-card"><span>Selecione um cliente para ver o histórico.</span></div>
       </div>
-    </section>
-
-    <!-- ══ TAB: IMPORTAR FOTO (OCR) ═══════════════════════════ -->
-    <section id="tabImportar" class="tab-panel" style="display:none">
-      <div class="panel-header">
-        <h2 class="panel-title">Importar Foto</h2>
-        <p class="panel-desc">Envie as fotos que o cliente mandou e receba só os códigos de rastreio.</p>
-      </div>
-
-      <div class="card">
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label" for="inpFotoOcr">Fotos do Cliente</label>
-          <input id="inpFotoOcr" class="form-input" type="file" accept="image/*" multiple onchange="carregarFotoParaCrop(event)"/>
-          <p class="form-hint">Selecione todas as fotos de uma vez — a leitura é automática (código de barras + texto). Só as fotos que falharem pedem recorte manual.</p>
-        </div>
-        <div id="ocrScanTemp" style="display:none"></div>
-        <div id="ocrCropWrap" style="display:none; margin-top:12px;">
-          <p class="form-hint" id="ocrFilaProgresso" style="margin-bottom:4px; font-weight:700; color:var(--amber);"></p>
-          <p class="form-hint" style="margin-bottom:8px;">📐 Arraste para selecionar só a área do código de rastreio — isso melhora muito a leitura.</p>
-          <canvas id="ocrCanvas" style="width:100%; border-radius:var(--r-sm); touch-action:none; cursor:crosshair; display:block;"></canvas>
-          <div class="filter-actions" style="margin-top:10px;">
-            <button class="btn btn-primary btn-sm" id="btnProcessarSelecao" onclick="processarSelecaoOcr()" disabled>Processar Seleção</button>
-            <button class="btn btn-ghost btn-sm" onclick="processarFotoInteiraOcr()">Usar Foto Inteira</button>
-            <button class="btn btn-ghost btn-sm" onclick="pularFotoOcr()">Pular Foto</button>
-          </div>
-        </div>
-        <div id="ocrFilaConcluida" class="empty-card" style="display:none; margin-top:12px;"></div>
-      </div>
-
-      <div id="ocrStatus" class="empty-card" style="display:none"><span>🔎 Lendo a imagem...</span></div>
-
-      <div class="section-header" id="ocrResultsHeader" style="display:none">
-        <h3 class="section-title">Códigos Encontrados (<span id="ocrResultsCount">0</span>)</h3>
-        <button class="btn btn-ghost btn-xs" onclick="copiarTodosCodigosOcr()">Copiar Todos</button>
-      </div>
-      <div id="ocrResultados" class="cards-list"></div>
-
-      <details id="ocrTextoBrutoWrap" style="display:none; margin-top:14px;">
-        <summary style="cursor:pointer;color:var(--text-3);font-size:0.8rem;">Ver texto bruto reconhecido</summary>
-        <pre id="ocrTextoBruto" class="ocr-raw-text"></pre>
-      </details>
     </section>
 
   </main>
