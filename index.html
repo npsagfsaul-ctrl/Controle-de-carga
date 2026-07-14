@@ -322,9 +322,16 @@
       <div class="card">
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label" for="inpFotoOcr">Foto do Cliente</label>
-          <input id="inpFotoOcr" class="form-input" type="file" accept="image/*" onchange="processarFotoOcr(event)"/>
+          <input id="inpFotoOcr" class="form-input" type="file" accept="image/*" onchange="carregarFotoParaCrop(event)"/>
         </div>
-        <img id="ocrPreview" style="display:none; max-width:100%; border-radius:var(--r-sm); margin-top:12px;" alt="Prévia da foto"/>
+        <div id="ocrCropWrap" style="display:none; margin-top:12px;">
+          <p class="form-hint" style="margin-bottom:8px;">📐 Arraste para selecionar só a área do código de rastreio — isso melhora muito a leitura.</p>
+          <canvas id="ocrCanvas" style="width:100%; border-radius:var(--r-sm); touch-action:none; cursor:crosshair; display:block;"></canvas>
+          <div class="filter-actions" style="margin-top:10px;">
+            <button class="btn btn-primary btn-sm" id="btnProcessarSelecao" onclick="processarSelecaoOcr()" disabled>Processar Seleção</button>
+            <button class="btn btn-ghost btn-sm" onclick="processarFotoInteiraOcr()">Usar Foto Inteira</button>
+          </div>
+        </div>
       </div>
 
       <div id="ocrStatus" class="empty-card" style="display:none"><span>🔎 Lendo a imagem...</span></div>

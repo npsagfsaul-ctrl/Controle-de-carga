@@ -75,6 +75,9 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('relDataInicio').value = trintaDiasAtras.toISOString().slice(0, 10);
   document.getElementById('relDataFim').value = hoje;
 
+  // Importar Foto: habilita o recorte por arrasto no canvas
+  inicializarCropOcr();
+
   // Enter key on manual scan
   document.getElementById('inpManual').addEventListener('keydown', e => {
     if (e.key === 'Enter') conferirManual();
@@ -1267,17 +1270,129 @@ function escHtml(s) {
 // ─── IMPORTAR FOTO (OCR) ───────────────────────────────────────────────────────
 // Extrai códigos de rastreio (padrão Correios: 2 letras + 9 números + 2 letras)
 // de uma foto enviada pelo cliente, usando OCR local (Tesseract.js).
+//
+// Fotos reais costumam ter muito fundo/ruído ao redor da etiqueta, o que
+// prejudica o OCR. Por isso deixamos o usuário recortar (arrastar) só a área
+// do código antes de processar — o recorte também é ampliado (zoom), já que
+// texto pequeno é o principal motivo de falha do OCR.
 let ocrCodigosEncontrados = [];
+let ocrImagemOriginal = null; // objeto Image() com a foto em resolução original
+let ocrEscalaCanvas   = 1;    // pixels do canvas exibido ÷ pixels reais da imagem
+let ocrSelecao        = null; // {x,y,w,h} em pixels REAIS da imagem
+let ocrArrastando     = false;
+let ocrInicioArrasto  = null;
 
-async function processarFotoOcr(e) {
+function inicializarCropOcr() {
+  const canvas = document.getElementById('ocrCanvas');
+  if (!canvas) return;
+
+  const posicaoNoCanvas = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const fatorX = canvas.width  / rect.width;
+    const fatorY = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * fatorX, y: (e.clientY - rect.top) * fatorY };
+  };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!ocrImagemOriginal) return;
+    ocrArrastando = true;
+    ocrInicioArrasto = posicaoNoCanvas(e);
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!ocrArrastando) return;
+    const atual = posicaoNoCanvas(e);
+    redesenharCanvasOcr(ocrInicioArrasto.x, ocrInicioArrasto.y, atual.x, atual.y);
+  });
+
+  canvas.addEventListener('pointerup', (e) => {
+    if (!ocrArrastando) return;
+    ocrArrastando = false;
+    const fim = posicaoNoCanvas(e);
+    const x = Math.min(ocrInicioArrasto.x, fim.x) / ocrEscalaCanvas;
+    const y = Math.min(ocrInicioArrasto.y, fim.y) / ocrEscalaCanvas;
+    const w = Math.abs(fim.x - ocrInicioArrasto.x) / ocrEscalaCanvas;
+    const h = Math.abs(fim.y - ocrInicioArrasto.y) / ocrEscalaCanvas;
+    document.getElementById('btnProcessarSelecao').disabled = !(w > 8 && h > 8);
+    if (w > 8 && h > 8) ocrSelecao = { x, y, w, h };
+  });
+}
+
+function carregarFotoParaCrop(e) {
   const file = e.target.files?.[0];
   if (!file) return;
 
-  // Prévia da imagem
-  const preview = document.getElementById('ocrPreview');
-  preview.src = URL.createObjectURL(file);
-  preview.style.display = 'block';
+  ocrCodigosEncontrados = [];
+  ocrSelecao = null;
+  document.getElementById('ocrResultsHeader').style.display = 'none';
+  document.getElementById('ocrResultados').innerHTML = '';
+  document.getElementById('ocrTextoBrutoWrap').style.display = 'none';
+  document.getElementById('ocrStatus').style.display = 'none';
+  document.getElementById('btnProcessarSelecao').disabled = true;
 
+  const img = new Image();
+  img.onload = () => {
+    ocrImagemOriginal = img;
+    document.getElementById('ocrCropWrap').style.display = 'block';
+    redesenharCanvasOcr();
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function redesenharCanvasOcr(x0, y0, x1, y1) {
+  const canvas = document.getElementById('ocrCanvas');
+  const img    = ocrImagemOriginal;
+  const ctx    = canvas.getContext('2d');
+
+  // Ajusta o tamanho do canvas à largura disponível na primeira vez
+  if (x0 === undefined) {
+    const maxW = canvas.parentElement.clientWidth || 340;
+    ocrEscalaCanvas = Math.min(1, maxW / img.naturalWidth);
+    canvas.width  = img.naturalWidth  * ocrEscalaCanvas;
+    canvas.height = img.naturalHeight * ocrEscalaCanvas;
+  }
+
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  if (x0 !== undefined) {
+    const x = Math.min(x0, x1), y = Math.min(y0, y1);
+    const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
+    ctx.strokeStyle = '#818cf8';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(129,140,248,0.15)';
+    ctx.fillRect(x, y, w, h);
+  }
+}
+
+async function processarSelecaoOcr() {
+  if (!ocrSelecao || !ocrImagemOriginal) return;
+  const { x, y, w, h } = ocrSelecao;
+
+  // Recorta só a área escolhida e amplia — texto pequeno é a principal causa de falha do OCR
+  const fatorAmpliacao = 3;
+  const out = document.createElement('canvas');
+  out.width  = Math.max(1, Math.round(w * fatorAmpliacao));
+  out.height = Math.max(1, Math.round(h * fatorAmpliacao));
+  out.getContext('2d').drawImage(ocrImagemOriginal, x, y, w, h, 0, 0, out.width, out.height);
+
+  const blob = await new Promise(res => out.toBlob(res, 'image/png'));
+  await executarOcr(blob);
+}
+
+async function processarFotoInteiraOcr() {
+  if (!ocrImagemOriginal) return;
+  const canvas = document.createElement('canvas');
+  canvas.width  = ocrImagemOriginal.naturalWidth;
+  canvas.height = ocrImagemOriginal.naturalHeight;
+  canvas.getContext('2d').drawImage(ocrImagemOriginal, 0, 0);
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+  await executarOcr(blob);
+}
+
+async function executarOcr(blob) {
   const status  = document.getElementById('ocrStatus');
   const header  = document.getElementById('ocrResultsHeader');
   const results = document.getElementById('ocrResultados');
@@ -1291,7 +1406,7 @@ async function processarFotoOcr(e) {
   status.innerHTML = '<span>🔎 Lendo a imagem...</span>';
 
   try {
-    const { data: { text } } = await Tesseract.recognize(file, 'eng');
+    const { data: { text } } = await Tesseract.recognize(blob, 'eng');
 
     // Padrão dos Correios, tolerando espaços que o OCR às vezes insere entre os grupos
     const regex = /[A-Z]{2}\s*\d{9}\s*[A-Z]{2}/gi;
@@ -1305,7 +1420,7 @@ async function processarFotoOcr(e) {
     rawWrap.style.display = 'block';
 
     if (!codigos.length) {
-      results.innerHTML = '<div class="empty-card"><span>Nenhum código de rastreio encontrado nesta foto. Tente uma foto mais nítida.</span></div>';
+      results.innerHTML = '<div class="empty-card"><span>Nenhum código de rastreio encontrado. Tente selecionar uma área menor, bem próxima do texto do código.</span></div>';
       header.style.display = 'none';
       return;
     }
