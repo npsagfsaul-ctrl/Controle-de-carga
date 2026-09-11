@@ -189,13 +189,23 @@ async function carregarClientesSugeridos() {
 
 // Lista de clientes distintos extraída dos objetos já cadastrados (fallback)
 async function clientesDeCargas() {
-  const { data } = await sb.from('cargas').select('cliente');
-  if (!data) return [];
+  // O Supabase devolve no máximo 1000 linhas por consulta: busca em páginas,
+  // senão clientes que só aparecem depois da linha 1000 somem da lista.
+  const PAGINA = 1000;
   const mapa = new Map(); // chave em minúsculas → nome como foi digitado
-  data.forEach(r => {
-    const nome = (r.cliente || '').trim();
-    if (nome && !mapa.has(nome.toLowerCase())) mapa.set(nome.toLowerCase(), nome);
-  });
+  for (let de = 0; ; de += PAGINA) {
+    const { data, error } = await sb
+      .from('cargas')
+      .select('cliente')
+      .order('created_at', { ascending: false }) // grafia mais recente prevalece
+      .range(de, de + PAGINA - 1);
+    if (error || !data) break;
+    data.forEach(r => {
+      const nome = (r.cliente || '').trim();
+      if (nome && !mapa.has(nome.toLowerCase())) mapa.set(nome.toLowerCase(), nome);
+    });
+    if (data.length < PAGINA) break;
+  }
   return [...mapa.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
@@ -1248,7 +1258,7 @@ function chkClientesPorCodigo(cod) {
 
 function chkCodigoAlterado() {
   const achados = chkClientesPorCodigo(document.getElementById('chkCodigo').value.trim());
-  if (achados.length === 1) document.getElementById('chkNome').value = achados[0];
+  if (achados.length) document.getElementById('chkNome').value = achados[0];
 }
 
 function chkNomeAlterado() {
@@ -1256,10 +1266,11 @@ function chkNomeAlterado() {
   if (cliente) document.getElementById('chkCodigo').value = chkCodigoDeCliente(cliente);
 }
 
-// Código tem prioridade; depois nome exato; por último nome parcial (se único)
+// Código tem prioridade; depois nome exato; por último nome parcial (se único).
+// Um mesmo código pode ter várias grafias — a pesquisa por código pega todas.
 function chkResolverCliente() {
   const porCodigo = chkClientesPorCodigo(document.getElementById('chkCodigo').value.trim());
-  if (porCodigo.length === 1) return porCodigo[0];
+  if (porCodigo.length) return porCodigo[0];
 
   const nome = document.getElementById('chkNome').value.trim();
   const exato = resolverCliente(nome);
@@ -1285,11 +1296,13 @@ async function pesquisarChecagem() {
   const ini = new Date(`${data}T00:00:00`).toISOString();
   const fim = new Date(`${data}T23:59:59.999`).toISOString();
 
+  // Com código, pega todas as grafias do cliente (ex.: "M&M (3088)" e "m&m (3088)")
+  const codigo = chkCodigoDeCliente(cliente);
+  let query = sb.from('cargas').select('*');
+  query = codigo ? query.like('cliente', `%(${codigo})`) : query.eq('cliente', cliente);
+
   showLoading(true, 'Pesquisando...');
-  const { data: rows, error } = await sb
-    .from('cargas')
-    .select('*')
-    .eq('cliente', cliente)
+  const { data: rows, error } = await query
     .or(`data_agendada.eq.${data},and(data_recebimento.gte.${ini},data_recebimento.lte.${fim})`)
     .order('codigo_rastreio');
   showLoading(false);
