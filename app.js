@@ -90,9 +90,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Impressão da checagem: tira a classe depois que o diálogo fecha
-  window.addEventListener('afterprint', () => document.body.classList.remove('print-checagem'));
-
   // Sem senha: conecta e carrega os dados direto
   iniciarApp();
 });
@@ -1390,7 +1387,7 @@ function renderChecagem() {
         ? `<div class="chk-lista">${balanca.map(itemBalanca).join('')}</div>`
         : `<div class="chk-vazio">${vazioBalanca}</div>`}
 
-      <details class="chk-colar no-print" ${codigosSGP ? '' : 'open'}>
+      <details class="chk-colar"${codigosSGP ? '' : 'open'}>
         <summary>📋 Colar lista do SGP</summary>
         <textarea id="chkColarTexto" class="form-input" placeholder="Cole aqui a lista copiada do SGP (pode colar a tela inteira, os códigos de rastreio são reconhecidos sozinhos)"></textarea>
         <button class="btn btn-primary btn-sm" onclick="aplicarListaSGP()">Separar códigos</button>
@@ -1447,12 +1444,6 @@ function exportarChecagem() {
   const ident = chkCodigoDeCliente(cliente) || cliente.replace(/[^a-z0-9]+/gi, '_');
   XLSX.writeFile(wb, `checagem_${ident}_${data}.xlsx`);
   showToast('📥 Checagem exportada!');
-}
-
-function imprimirChecagem() {
-  if (!chkState) { showToast('⚠️ Faça uma pesquisa primeiro.'); return; }
-  document.body.classList.add('print-checagem');
-  window.print();
 }
 
 // ─── Modals ───────────────────────────────────────────────────────────────────

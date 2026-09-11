@@ -1067,25 +1067,3 @@ details[open] > .client-summary .client-icon {
 @media (min-width: 601px) {
   .chk-lista { display: grid; grid-template-columns: 1fr 1fr; }
 }
-
-/* Impressão: só a checagem, em fundo branco */
-@media print {
-  body.print-checagem {
-    --bg: #fff; --bg-card: #fff; --bg-input: #fff; --bg-elevated: #fff;
-    --text: #000; --text-2: #333; --text-3: #555; --accent-2: #000;
-    --border: #bbb;
-    background: #fff;
-    color: #000;
-  }
-  body.print-checagem .app-header,
-  body.print-checagem #tabChecagem .filter-card,
-  body.print-checagem .no-print,
-  body.print-checagem .toast,
-  body.print-checagem .loading-overlay { display: none !important; }
-  body.print-checagem .app-main { max-width: none; padding: 0; }
-  body.print-checagem .panel-title { -webkit-text-fill-color: #000; background: none; }
-  body.print-checagem .card,
-  body.print-checagem .pill,
-  body.print-checagem .chk-item { break-inside: avoid; }
-  body.print-checagem .chk-lista { display: grid; grid-template-columns: 1fr 1fr 1fr; }
-}
