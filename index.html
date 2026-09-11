@@ -48,6 +48,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
         Relatório
       </button>
+      <button class="tab-btn" data-tab="tabChecagem"   onclick="switchTab('tabChecagem')"   role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+        Checagem
+      </button>
     </nav>
   </header>
 
@@ -304,6 +308,50 @@
       <!-- Results -->
       <div id="relResultados">
         <div class="empty-card"><span>Selecione um cliente para ver o histórico.</span></div>
+      </div>
+    </section>
+
+    <!-- ══ TAB: CHECAGEM DE REMESSAS ═════════════════════════ -->
+    <section id="tabChecagem" class="tab-panel" style="display:none">
+      <div class="panel-header">
+        <h2 class="panel-title">Checagem de Remessas</h2>
+        <p class="panel-desc">Separe o dia do cliente entre objetos passados na balança e conferências manuais.</p>
+      </div>
+
+      <div class="card filter-card">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="chkCodigo">Código do Cliente</label>
+            <input id="chkCodigo" class="form-input" type="text" inputmode="numeric" placeholder="Ex: 3047" autocomplete="off" oninput="chkCodigoAlterado()"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="chkData">Data</label>
+            <input id="chkData" class="form-input" type="date"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="chkNome">Nome do Cliente</label>
+          <input id="chkNome" class="form-input" type="text" list="listaClientesChk" placeholder="Digite o nome do cliente..." autocomplete="off" oninput="chkNomeAlterado()"/>
+          <datalist id="listaClientesChk"></datalist>
+        </div>
+        <div class="filter-actions">
+          <button class="btn btn-primary" onclick="pesquisarChecagem()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            Pesquisar
+          </button>
+          <button class="btn btn-outline" onclick="exportarChecagem()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar Excel
+          </button>
+          <button class="btn btn-ghost" onclick="imprimirChecagem()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Imprimir
+          </button>
+        </div>
+      </div>
+
+      <div id="chkResultados">
+        <div class="empty-card"><span>Informe o cliente e a data e clique em Pesquisar.</span></div>
       </div>
     </section>
 

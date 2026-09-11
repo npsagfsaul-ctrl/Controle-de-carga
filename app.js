@@ -75,10 +75,23 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('relDataInicio').value = trintaDiasAtras.toISOString().slice(0, 10);
   document.getElementById('relDataFim').value = hoje;
 
+  // Checagem de remessas: data padrão hoje
+  document.getElementById('chkData').value = hoje;
+
   // Enter key on manual scan
   document.getElementById('inpManual').addEventListener('keydown', e => {
     if (e.key === 'Enter') conferirManual();
   });
+
+  // Enter nos campos da checagem dispara a pesquisa
+  ['chkCodigo', 'chkNome', 'chkData'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') pesquisarChecagem();
+    });
+  });
+
+  // Impressão da checagem: tira a classe depois que o diálogo fecha
+  window.addEventListener('afterprint', () => document.body.classList.remove('print-checagem'));
 
   // Sem senha: conecta e carrega os dados direto
   iniciarApp();
@@ -212,6 +225,11 @@ function popularSelectsClientes() {
     const atual = selRelatorio.value;
     selRelatorio.innerHTML = `<option value="">Selecione um cliente...</option>` + options;
     if (atual && clientesSugeridos.includes(atual)) selRelatorio.value = atual;
+  }
+
+  const listaChecagem = document.getElementById('listaClientesChk');
+  if (listaChecagem) {
+    listaChecagem.innerHTML = clientesSugeridos.map(c => `<option value="${escHtml(c)}"></option>`).join('');
   }
 }
 
@@ -1211,6 +1229,230 @@ function exportarRelatorioCliente() {
   const filename = `relatorio_${cliente.replace(/[^a-z0-9]+/gi, '_')}.xlsx`;
   XLSX.writeFile(wb, filename);
   showToast('📥 Relatório exportado!');
+}
+
+// ─── CHECAGEM DE REMESSAS ─────────────────────────────────────────────────────
+// Separa o dia de um cliente em dois quadros:
+//  • Conferência manual = objetos cadastrados no Controle de Cargas (antecipados),
+//    com ✓ quando foram bipados.
+//  • Passados na balança = objetos do SGP que NÃO estão cadastrados aqui.
+// Enquanto a API do SGP não estiver liberada, a lista do SGP é colada manualmente.
+let chkState = null; // { cliente, data, manual: [], balanca: [], codigosSGP: Set|null }
+
+// Os clientes são cadastrados como "NOME (CÓDIGO)"
+function chkCodigoDeCliente(nome) {
+  const m = /\((\d+)\)\s*$/.exec(nome || '');
+  return m ? m[1] : '';
+}
+
+function chkClientesPorCodigo(cod) {
+  return cod ? clientesSugeridos.filter(c => chkCodigoDeCliente(c) === cod) : [];
+}
+
+function chkCodigoAlterado() {
+  const achados = chkClientesPorCodigo(document.getElementById('chkCodigo').value.trim());
+  if (achados.length === 1) document.getElementById('chkNome').value = achados[0];
+}
+
+function chkNomeAlterado() {
+  const cliente = resolverCliente(document.getElementById('chkNome').value);
+  if (cliente) document.getElementById('chkCodigo').value = chkCodigoDeCliente(cliente);
+}
+
+// Código tem prioridade; depois nome exato; por último nome parcial (se único)
+function chkResolverCliente() {
+  const porCodigo = chkClientesPorCodigo(document.getElementById('chkCodigo').value.trim());
+  if (porCodigo.length === 1) return porCodigo[0];
+
+  const nome = document.getElementById('chkNome').value.trim();
+  const exato = resolverCliente(nome);
+  if (exato) return exato;
+
+  if (!nome) return null;
+  const parciais = clientesSugeridos.filter(c => c.toLowerCase().includes(nome.toLowerCase()));
+  return parciais.length === 1 ? parciais[0] : null;
+}
+
+async function pesquisarChecagem() {
+  if (!sb) { showToast('⚠️ Configure o Supabase primeiro.'); return; }
+
+  const cliente = chkResolverCliente();
+  const data    = document.getElementById('chkData').value;
+  if (!cliente) { showToast('⚠️ Cliente não encontrado. Confira o código ou o nome.'); return; }
+  if (!data)    { showToast('⚠️ Selecione a data.'); return; }
+
+  document.getElementById('chkNome').value   = cliente;
+  document.getElementById('chkCodigo').value = chkCodigoDeCliente(cliente);
+
+  // Objetos do cliente previstos para o dia OU bipados no dia (limites do dia no fuso local)
+  const ini = new Date(`${data}T00:00:00`).toISOString();
+  const fim = new Date(`${data}T23:59:59.999`).toISOString();
+
+  showLoading(true, 'Pesquisando...');
+  const { data: rows, error } = await sb
+    .from('cargas')
+    .select('*')
+    .eq('cliente', cliente)
+    .or(`data_agendada.eq.${data},and(data_recebimento.gte.${ini},data_recebimento.lte.${fim})`)
+    .order('codigo_rastreio');
+  showLoading(false);
+
+  if (error) { showToast('❌ Erro ao pesquisar: ' + error.message); return; }
+
+  chkState = { cliente, data, manual: rows || [], balanca: [], codigosSGP: null };
+  renderChecagem();
+}
+
+async function aplicarListaSGP() {
+  if (!chkState) return;
+  const texto   = document.getElementById('chkColarTexto').value.toUpperCase();
+  const codigos = [...new Set(texto.match(/[A-Z]{2}\d{9}[A-Z]{2}/g) || [])];
+  if (!codigos.length) { showToast('⚠️ Nenhum código de rastreio encontrado no texto colado.'); return; }
+
+  // Quem estiver cadastrado no Controle de Cargas é conferência manual; o resto passou na balança
+  showLoading(true, 'Cruzando com os cadastros...');
+  const cadastrados = [];
+  for (let i = 0; i < codigos.length; i += 150) {
+    const { data, error } = await sb.from('cargas').select('*').in('codigo_rastreio', codigos.slice(i, i + 150));
+    if (error) { showLoading(false); showToast('❌ Erro ao cruzar: ' + error.message); return; }
+    cadastrados.push(...(data || []));
+  }
+  showLoading(false);
+
+  const codigosCadastrados = new Set(cadastrados.map(r => r.codigo_rastreio));
+  const jaNoManual = new Set(chkState.manual.map(r => r.codigo_rastreio));
+  cadastrados.forEach(r => {
+    if (!jaNoManual.has(r.codigo_rastreio)) { chkState.manual.push(r); jaNoManual.add(r.codigo_rastreio); }
+  });
+
+  chkState.balanca    = codigos.filter(c => !codigosCadastrados.has(c)).sort();
+  chkState.codigosSGP = new Set(codigos);
+  renderChecagem();
+  showToast(`✅ ${codigos.length} códigos lidos: ${chkState.balanca.length} na balança.`);
+}
+
+function renderChecagem() {
+  const el = document.getElementById('chkResultados');
+  if (!chkState) return;
+
+  const { cliente, data, balanca, codigosSGP } = chkState;
+  // Não bipados primeiro, para chamar atenção
+  const manual = [...chkState.manual].sort((a, b) =>
+    (a.recebido - b.recebido) || a.codigo_rastreio.localeCompare(b.codigo_rastreio));
+  const bipados = manual.filter(r => r.recebido).length;
+
+  const itemBalanca = c => `
+    <div class="chk-item">
+      <span class="chk-code">${escHtml(c)}</span>
+    </div>`;
+
+  const itemManual = r => {
+    const foraSGP = codigosSGP && !codigosSGP.has(r.codigo_rastreio);
+    return `
+    <div class="chk-item ${r.recebido ? 'ok' : 'pendente'}">
+      <span class="chk-code">${escHtml(r.codigo_rastreio)}</span>
+      ${foraSGP ? '<span class="badge badge-red" title="Cadastrado aqui, mas não veio na lista colada do SGP">fora do SGP</span>' : ''}
+      ${r.recebido
+        ? '<span class="badge badge-green">✓ Bipado</span>'
+        : '<span class="badge badge-amber">⏳ Não bipado</span>'}
+    </div>`;
+  };
+
+  const vazioBalanca = codigosSGP
+    ? 'Nenhum objeto de balança na lista colada.'
+    : 'Sem dados do SGP ainda. Cole abaixo a lista do SGP deste cliente e dia.';
+
+  el.innerHTML = `
+    <div class="chk-titulo">👤 ${escHtml(cliente)} &nbsp;•&nbsp; 📅 ${formatDateBR(data)}</div>
+
+    <div class="summary-pills">
+      <div class="pill pill-total">
+        <span class="pill-num">${balanca.length + manual.length}</span>
+        <span class="pill-label">Total</span>
+      </div>
+      <div class="pill pill-blue">
+        <span class="pill-num">${balanca.length}</span>
+        <span class="pill-label">Balança</span>
+      </div>
+      <div class="pill pill-amber">
+        <span class="pill-num">${manual.length}</span>
+        <span class="pill-label">Manual</span>
+      </div>
+    </div>
+
+    <div class="card chk-quadro">
+      <div class="chk-quadro-head">
+        <span>⚖️ Passados na balança</span>
+        <span class="badge badge-blue">${balanca.length}</span>
+      </div>
+      <div class="chk-quadro-sub">Objetos do SGP que não estão cadastrados no Controle de Cargas.</div>
+      ${balanca.length
+        ? `<div class="chk-lista">${balanca.map(itemBalanca).join('')}</div>`
+        : `<div class="chk-vazio">${vazioBalanca}</div>`}
+
+      <details class="chk-colar no-print" ${codigosSGP ? '' : 'open'}>
+        <summary>📋 Colar lista do SGP</summary>
+        <textarea id="chkColarTexto" class="form-input" placeholder="Cole aqui a lista copiada do SGP (pode colar a tela inteira, os códigos de rastreio são reconhecidos sozinhos)"></textarea>
+        <button class="btn btn-primary btn-sm" onclick="aplicarListaSGP()">Separar códigos</button>
+      </details>
+    </div>
+
+    <div class="card chk-quadro">
+      <div class="chk-quadro-head">
+        <span>✋ Conferência manual</span>
+        <span class="badge badge-amber">${manual.length}</span>
+      </div>
+      <div class="chk-quadro-sub">Cadastrados no Controle de Cargas: ${bipados} bipado(s), ${manual.length - bipados} não bipado(s).</div>
+      ${manual.length
+        ? `<div class="chk-lista">${manual.map(itemManual).join('')}</div>`
+        : '<div class="chk-vazio">Nenhum objeto cadastrado para este cliente neste dia.</div>'}
+    </div>`;
+}
+
+function exportarChecagem() {
+  if (!chkState) { showToast('⚠️ Faça uma pesquisa primeiro.'); return; }
+  if (!window.XLSX) { showToast('❌ Biblioteca Excel não carregada. Recarregue a página.'); return; }
+
+  const { cliente, data, balanca, manual } = chkState;
+  const linhas = [
+    ...balanca.map(c => ({
+      'Quadro':             'Passado na balança',
+      'Código de Rastreio': c,
+      'Bipado':             '—',
+      'Data Recebimento':   '',
+    })),
+    ...manual.map(r => ({
+      'Quadro':             'Conferência manual',
+      'Código de Rastreio': r.codigo_rastreio,
+      'Bipado':             r.recebido ? 'Sim' : 'Não',
+      'Data Recebimento':   r.data_recebimento ? formatDateTime(r.data_recebimento) : '',
+    })),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Checagem de Remessas'],
+    ['Cliente', cliente],
+    ['Data', formatDateBR(data)],
+    ['Passados na balança', balanca.length],
+    ['Conferência manual', manual.length],
+    ['Total', balanca.length + manual.length],
+    [],
+  ]);
+  XLSX.utils.sheet_add_json(ws, linhas, { origin: -1 });
+  ws['!cols'] = [{wch:22},{wch:34},{wch:10},{wch:22}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Checagem');
+
+  const ident = chkCodigoDeCliente(cliente) || cliente.replace(/[^a-z0-9]+/gi, '_');
+  XLSX.writeFile(wb, `checagem_${ident}_${data}.xlsx`);
+  showToast('📥 Checagem exportada!');
+}
+
+function imprimirChecagem() {
+  if (!chkState) { showToast('⚠️ Faça uma pesquisa primeiro.'); return; }
+  document.body.classList.add('print-checagem');
+  window.print();
 }
 
 // ─── Modals ───────────────────────────────────────────────────────────────────
