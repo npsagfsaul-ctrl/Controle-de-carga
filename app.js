@@ -78,6 +78,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // Checagem de remessas: data padrão hoje
   document.getElementById('chkData').value = hoje;
 
+  // Seletores de cliente com busca e barra de rolagem (abrem sempre para baixo)
+  SELECTS_CLIENTE.forEach(id => criarSelectBusca(document.getElementById(id)));
+
   // Enter key on manual scan
   document.getElementById('inpManual').addEventListener('keydown', e => {
     if (e.key === 'Enter') conferirManual();
@@ -238,6 +241,109 @@ function popularSelectsClientes() {
   if (listaChecagem) {
     listaChecagem.innerHTML = clientesSugeridos.map(c => `<option value="${escHtml(c)}"></option>`).join('');
   }
+
+  // Atualiza o rótulo/lista dos seletores com busca
+  SELECTS_CLIENTE.forEach(id => document.getElementById(id)?._sbAtualizar?.());
+}
+
+// ─── Seletor de cliente com busca ─────────────────────────────────────────────
+// O <select> nativo abre a lista do jeito do navegador (às vezes para cima,
+// cobrindo a tela inteira). Este componente mostra a lista sempre para baixo,
+// com barra de rolagem e campo de busca. O <select> original continua no DOM,
+// escondido, guardando o valor — então o resto do código não muda.
+const SELECTS_CLIENTE = ['inpCliente', 'editCliente', 'relCliente'];
+
+function criarSelectBusca(select) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sb-wrap';
+  select.parentNode.insertBefore(wrap, select);
+  wrap.appendChild(select);
+  select.classList.add('sb-nativo');
+  select.tabIndex = -1;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'form-select sb-trigger';
+
+  const panel = document.createElement('div');
+  panel.className = 'sb-panel';
+  panel.hidden = true;
+  panel.innerHTML = `
+    <input type="text" class="form-input sb-busca" placeholder="Buscar cliente..." autocomplete="off"/>
+    <div class="sb-lista"></div>`;
+  wrap.append(btn, panel);
+
+  const busca = panel.querySelector('.sb-busca');
+  const lista = panel.querySelector('.sb-lista');
+  let destaque = 0;
+
+  const atualizarLabel = () => {
+    const opt = select.selectedOptions[0];
+    btn.textContent = opt ? opt.textContent : '';
+    btn.classList.toggle('sb-placeholder', !select.value);
+  };
+
+  // Mantém o rótulo em dia quando o código define select.value diretamente
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  Object.defineProperty(select, 'value', {
+    configurable: true,
+    get() { return desc.get.call(this); },
+    set(v) { desc.set.call(this, v); atualizarLabel(); },
+  });
+
+  const itensVisiveis = () => [...lista.querySelectorAll('.sb-opcao')];
+
+  const renderLista = () => {
+    const termo = busca.value.trim().toLowerCase();
+    const opts  = [...select.options].filter(o => o.value && o.textContent.toLowerCase().includes(termo));
+    destaque = termo ? 0 : Math.max(opts.findIndex(o => o.value === select.value), 0);
+    lista.innerHTML = opts.length
+      ? opts.map((o, i) => `<div class="sb-opcao${o.value === select.value ? ' selecionado' : ''}${i === destaque ? ' destaque' : ''}" data-valor="${escHtml(o.value)}">${escHtml(o.textContent)}</div>`).join('')
+      : '<div class="sb-vazio">Nenhum cliente encontrado.</div>';
+    lista.querySelector('.destaque')?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const moverDestaque = passo => {
+    const itens = itensVisiveis();
+    if (!itens.length) return;
+    itens[destaque]?.classList.remove('destaque');
+    destaque = (destaque + passo + itens.length) % itens.length;
+    itens[destaque].classList.add('destaque');
+    itens[destaque].scrollIntoView({ block: 'nearest' });
+  };
+
+  const abrir  = () => { panel.hidden = false; busca.value = ''; renderLista(); busca.focus(); };
+  const fechar = () => { panel.hidden = true; };
+
+  const escolher = valor => {
+    select.value = valor;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    fechar();
+    btn.focus();
+  };
+
+  btn.addEventListener('click', () => (panel.hidden ? abrir() : fechar()));
+  busca.addEventListener('input', renderLista);
+  busca.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown')    { e.preventDefault(); moverDestaque(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moverDestaque(-1); }
+    else if (e.key === 'Enter') {
+      e.preventDefault(); // não envia o formulário
+      const item = itensVisiveis()[destaque];
+      if (item) escolher(item.dataset.valor);
+    }
+    else if (e.key === 'Escape')  { e.preventDefault(); fechar(); btn.focus(); }
+  });
+  lista.addEventListener('mousedown', e => {
+    const item = e.target.closest('.sb-opcao');
+    if (!item) return;
+    e.preventDefault();
+    escolher(item.dataset.valor);
+  });
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) fechar(); });
+
+  select._sbAtualizar = () => { atualizarLabel(); if (!panel.hidden) renderLista(); };
+  atualizarLabel();
 }
 
 // Retorna o nome canônico cadastrado (comparação sem diferenciar maiúsc/minúsc)

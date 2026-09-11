@@ -233,6 +233,53 @@ body {
 .input-with-action { display: flex; gap: 8px; }
 .input-with-action .form-input { flex: 1; }
 
+/* ── Seletor de cliente com busca ───────────────────────── */
+.sb-wrap { position: relative; flex: 1; min-width: 0; }
+.sb-nativo { display: none !important; }
+
+.sb-trigger {
+  display: block;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-trigger.sb-placeholder { color: var(--text-2); }
+
+.sb-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+.sb-panel[hidden] { display: none; }
+
+.sb-busca { margin-bottom: 6px; padding: 9px 12px; }
+
+.sb-lista { max-height: 240px; overflow-y: auto; }
+.sb-lista::-webkit-scrollbar { width: 8px; }
+.sb-lista::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+
+.sb-opcao {
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.sb-opcao:hover,
+.sb-opcao.destaque   { background: var(--accent-glow); }
+.sb-opcao.selecionado { color: var(--accent-2); font-weight: 600; }
+
+.sb-vazio { padding: 10px 12px; font-size: 0.82rem; color: var(--text-3); }
+
 /* ── Buttons ─────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
