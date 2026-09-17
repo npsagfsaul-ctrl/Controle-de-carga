@@ -933,7 +933,7 @@ async function carregarLogHoje() {
     <div class="log-item ok">
       <span class="log-icon">✅</span>
       <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
-      <span style="font-size:.8rem;color:var(--text-2);flex:1">${escHtml(r.cliente)}</span>
+      <span class="log-cliente">${escHtml(r.cliente)}</span>
       ${seloOutroDia(r)}
       <span class="log-time">${formatTime(r.data_recebimento)}</span>
     </div>`).join('');
@@ -959,7 +959,7 @@ function renderLogHoje() {
     <div class="log-item ${e.ok ? 'ok' : 'err'}">
       <span class="log-icon">${e.ok ? '✅' : '❌'}</span>
       <span class="log-code">${escHtml(e.code)}</span>
-      <span style="font-size:.8rem;color:var(--text-2);flex:1">${escHtml(e.msg)}</span>
+      <span class="log-cliente">${escHtml(e.msg)}</span>
       <span class="log-time">${formatTime(e.time)}</span>
     </div>`).join('');
 }

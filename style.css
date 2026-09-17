@@ -551,6 +551,7 @@ body {
 .log-list { display: flex; flex-direction: column; gap: 6px; }
 
 .log-item {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -583,7 +584,17 @@ body {
 }
 .log-resumo-sep { color: var(--text-3); }
 .log-resumo-alerta { color: var(--amber); }
-.log-code { font-family: 'Courier New', monospace; font-weight: 700; color: var(--accent-2); flex: 1; word-break: break-all; }
+.log-code { font-family: 'Courier New', monospace; font-weight: 700; color: var(--accent-2); flex: 0 0 auto; white-space: nowrap; }
+
+.log-cliente {
+  flex: 1 1 90px;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .log-time { font-size: 0.72rem; color: var(--text-3); flex-shrink: 0; }
 
 /* ── Consulta ────────────────────────────────────────────── */
