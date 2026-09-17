@@ -906,7 +906,7 @@ async function carregarLogHoje() {
 
   const { data } = await sb
     .from('cargas')
-    .select('codigo_rastreio, cliente, tipo_servico, data_recebimento')
+    .select('codigo_rastreio, cliente, tipo_servico, data_agendada, data_recebimento')
     .eq('recebido', true)
     .gte('data_recebimento', start)
     .lte('data_recebimento', end)
@@ -918,15 +918,38 @@ async function carregarLogHoje() {
     return;
   }
 
+  const hoje = todayISO();
+
+  // Selo para objeto lido hoje que estava previsto para outro dia
+  const seloOutroDia = r => {
+    if (!r.data_agendada || r.data_agendada === hoje) return '';
+    const curta = r.data_agendada.slice(8, 10) + '/' + r.data_agendada.slice(5, 7);
+    return r.data_agendada < hoje
+      ? `<span class="badge badge-amber log-badge" title="Estava previsto para ${formatDateBR(r.data_agendada)}">⏰ de ${curta}</span>`
+      : `<span class="badge badge-blue log-badge" title="Está previsto para ${formatDateBR(r.data_agendada)}">⚡ para ${curta}</span>`;
+  };
+
   const html = (data || []).map(r => `
     <div class="log-item ok">
       <span class="log-icon">✅</span>
       <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
       <span style="font-size:.8rem;color:var(--text-2);flex:1">${escHtml(r.cliente)}</span>
+      ${seloOutroDia(r)}
       <span class="log-time">${formatTime(r.data_recebimento)}</span>
     </div>`).join('');
 
-  el.innerHTML = html || '<div class="empty-card"><span>Nenhuma conferência hoje.</span></div>';
+  // Resumo: quantos bipes são de hoje e quantos vieram de outra data
+  const outroDia = (data || []).filter(r => r.data_agendada && r.data_agendada !== hoje);
+  const resumo = data?.length
+    ? `<div class="log-resumo">
+         <span>${data.length} bipe(s) hoje</span>
+         <span class="log-resumo-sep">•</span>
+         <span>${data.length - outroDia.length} previsto(s) para hoje</span>
+         ${outroDia.length ? `<span class="log-resumo-sep">•</span><span class="log-resumo-alerta">⏰ ${outroDia.length} de outro dia</span>` : ''}
+       </div>`
+    : '';
+
+  el.innerHTML = (resumo + html) || '<div class="empty-card"><span>Nenhuma conferência hoje.</span></div>';
 }
 
 function renderLogHoje() {

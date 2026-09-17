@@ -565,6 +565,24 @@ body {
 .log-item.err { border-left: 3px solid var(--red); }
 
 .log-icon { font-size: 1.1rem; flex-shrink: 0; }
+.log-badge { flex-shrink: 0; font-size: 0.68rem; padding: 3px 7px; }
+
+.log-resumo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.log-resumo-sep { color: var(--text-3); }
+.log-resumo-alerta { color: var(--amber); }
 .log-code { font-family: 'Courier New', monospace; font-weight: 700; color: var(--accent-2); flex: 1; word-break: break-all; }
 .log-time { font-size: 0.72rem; color: var(--text-3); flex-shrink: 0; }
 
