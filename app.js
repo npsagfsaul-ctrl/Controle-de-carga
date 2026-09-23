@@ -162,7 +162,7 @@ function switchTab(tabId) {
 
   // Load data when switching tabs
   if (tabId === 'tabCadastro')    carregarListaHoje();
-  if (tabId === 'tabConferencia') carregarLogHoje();
+  if (tabId === 'tabConferencia') { carregarLogHoje(); carregarPendentesAnteriores(); }
   if (tabId === 'tabConsulta')    carregarConsulta();
 }
 
@@ -171,6 +171,7 @@ function carregarTudo() {
   carregarListaHoje();
   carregarClientesSugeridos();
   carregarLogHoje();
+  carregarPendentesAnteriores();
 }
 
 // ─── Clientes (lista fechada) ─────────────────────────────────────────────────
@@ -869,8 +870,107 @@ async function processarConferencia(code) {
     showToast(`✅ ${code} — ${carga.cliente} confirmado!`);
   }
 
-  // Atualiza log
+  // Atualiza log e o aviso de pendentes de dias anteriores
   carregarLogHoje();
+  carregarPendentesAnteriores();
+}
+
+// ─── Pendentes de dias anteriores ─────────────────────────────────────────────
+// Aviso do que ficou sem bipe em dias passados (ex.: hoje é 23/09 e ainda falta
+// 1 objeto do dia 22/09). Mostra por padrão os últimos 15 dias, para não poluir
+// com cadastros muito antigos que nunca chegaram.
+const PEND_DIAS_PADRAO = 15;
+let pendentesVerTudo = false;
+
+function alternarPendentesVerTudo() {
+  pendentesVerTudo = !pendentesVerTudo;
+  carregarPendentesAnteriores();
+}
+
+async function carregarPendentesAnteriores() {
+  const el = document.getElementById('pendentesAnteriores');
+  if (!el) return;
+  if (!sb) { el.innerHTML = ''; return; }
+
+  const hoje = todayISO();
+  const limite = new Date();
+  limite.setDate(limite.getDate() - PEND_DIAS_PADRAO);
+  const desde = limite.toISOString().slice(0, 10);
+
+  let query = sb
+    .from('cargas')
+    .select('codigo_rastreio, cliente, tipo_servico, data_agendada')
+    .eq('recebido', false)
+    .lt('data_agendada', hoje)
+    .order('data_agendada', { ascending: false });
+  if (!pendentesVerTudo) query = query.gte('data_agendada', desde);
+
+  const { data, error } = await query;
+  if (error) { el.innerHTML = ''; return; }
+
+  // Quantos existem no total (para oferecer o "ver todos")
+  const { count: totalGeral } = await sb
+    .from('cargas')
+    .select('id', { count: 'exact', head: true })
+    .eq('recebido', false)
+    .lt('data_agendada', hoje);
+
+  const rows = data || [];
+  const antigos = (totalGeral || 0) - rows.length;
+
+  if (!rows.length) {
+    el.innerHTML = pendentesVerTudo || !antigos
+      ? `<div class="pend-ok">✅ Nenhum objeto pendente de dias anteriores.</div>`
+      : `<div class="pend-ok">✅ Nada pendente nos últimos ${PEND_DIAS_PADRAO} dias.
+           <button class="btn btn-ghost btn-xs" onclick="alternarPendentesVerTudo()">Ver ${antigos} antigo(s)</button>
+         </div>`;
+    return;
+  }
+
+  // Agrupa por data e, dentro dela, por cliente
+  const porData = {};
+  rows.forEach(r => {
+    const dia = r.data_agendada;
+    porData[dia] = porData[dia] || {};
+    porData[dia][r.cliente] = porData[dia][r.cliente] || [];
+    porData[dia][r.cliente].push(r);
+  });
+
+  const grupos = Object.keys(porData).sort().reverse().map(dia => {
+    const clientes = Object.keys(porData[dia]).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const qtdDia = clientes.reduce((s, c) => s + porData[dia][c].length, 0);
+    const blocos = clientes.map(cliente => `
+      <div class="pend-cliente">
+        <div class="pend-cliente-nome">👤 ${escHtml(cliente)} <span class="badge badge-amber">${porData[dia][cliente].length}</span></div>
+        ${porData[dia][cliente].map(r => `
+          <div class="pend-item">
+            <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
+            <span class="tipo-pill">${escHtml(r.tipo_servico)}</span>
+          </div>`).join('')}
+      </div>`).join('');
+    return `
+      <div class="pend-dia">
+        <div class="pend-dia-head">📅 ${formatDateBR(dia)} <span class="badge badge-red">${qtdDia} sem bipe</span></div>
+        ${blocos}
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <details class="pend-card" open>
+      <summary class="pend-summary">
+        <span>⚠️ Pendentes de dias anteriores</span>
+        <span class="badge badge-red">${rows.length}</span>
+      </summary>
+      <div class="pend-conteudo">
+        ${grupos}
+        ${antigos > 0 && !pendentesVerTudo
+          ? `<button class="btn btn-ghost btn-xs" onclick="alternarPendentesVerTudo()">Ver também ${antigos} de mais de ${PEND_DIAS_PADRAO} dias</button>`
+          : ''}
+        ${pendentesVerTudo
+          ? `<button class="btn btn-ghost btn-xs" onclick="alternarPendentesVerTudo()">Mostrar só os últimos ${PEND_DIAS_PADRAO} dias</button>`
+          : ''}
+      </div>
+    </details>`;
 }
 
 // ─── Feedback Panel ───────────────────────────────────────────────────────────
@@ -966,7 +1066,11 @@ function renderLogHoje() {
 
 // ─── CONSULTA ─────────────────────────────────────────────────────────────────
 let consultaData = [];
+let consultaPendentes = [];   // objetos sem bipe de dias ANTERIORES à data consultada
 let diasComDados = new Set(); // datas que têm objetos (para o calendário)
+
+// Quantos dias para trás a consulta procura pendências de outros dias
+const CONSULTA_PEND_DIAS = 30;
 
 async function carregarConsulta() {
   const data  = window._consultaDataSelecionada || '';
@@ -987,6 +1091,21 @@ async function carregarConsulta() {
   if (error) { el.innerHTML = '<div class="empty-card"><span>Erro ao consultar.</span></div>'; return; }
 
   consultaData = rows || [];
+
+  // Pendências de dias anteriores (ex.: consultando 23/09, ainda falta 1 do 22/09)
+  const limite = new Date(`${data}T00:00:00`);
+  limite.setDate(limite.getDate() - CONSULTA_PEND_DIAS);
+  const desde = `${limite.getFullYear()}-${String(limite.getMonth()+1).padStart(2,'0')}-${String(limite.getDate()).padStart(2,'0')}`;
+
+  const { data: pend } = await sb
+    .from('cargas')
+    .select('*')
+    .eq('recebido', false)
+    .lt('data_agendada', data)
+    .gte('data_agendada', desde)
+    .order('data_agendada', { ascending: false });
+
+  consultaPendentes = pend || [];
   renderConsulta();
 }
 
@@ -1047,6 +1166,32 @@ function renderConsulta() {
 
   const clientesOk = grupos.filter(g => g.ok).length;
 
+  // Pendências de dias anteriores, por cliente (respeitando o filtro digitado)
+  const pendentes = filtCli
+    ? consultaPendentes.filter(r => r.cliente.toLowerCase().includes(filtCli))
+    : consultaPendentes;
+  const pendPorCliente = {};
+  pendentes.forEach(r => {
+    (pendPorCliente[r.cliente] = pendPorCliente[r.cliente] || []).push(r);
+  });
+
+  const blocoPendencias = (cliente) => {
+    const itens = pendPorCliente[cliente];
+    if (!itens?.length) return '';
+    return `
+      <div class="pend-antes">
+        <div class="pend-antes-head">⏰ Pendente de dia(s) anterior(es) — não conta no total deste dia</div>
+        ${itens.map(r => cargaCardHTML(r, true)).join('')}
+      </div>`;
+  };
+
+  const seloPendencias = (cliente) => {
+    const itens = pendPorCliente[cliente];
+    if (!itens?.length) return '';
+    const dias = [...new Set(itens.map(r => formatDateBR(r.data_agendada)))];
+    return `<span class="badge badge-red" title="Sem bipe desde ${dias.join(', ')}">⏰ ${itens.length} de ${dias[0]}${dias.length > 1 ? ' +' : ''}</span>`;
+  };
+
   const renderClientGroup = (g) => {
     const statusBadge = g.ok
       ? `<span class="badge badge-green">✅ OK</span>`
@@ -1062,6 +1207,7 @@ function renderConsulta() {
             </button>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
+            ${seloPendencias(g.cliente)}
             ${statusBadge}
             <span class="badge badge-blue">${g.recebidos}/${g.total}</span>
             <span class="client-icon">
@@ -1073,6 +1219,7 @@ function renderConsulta() {
         </summary>
         <div class="client-content">
           ${g.items.map(r => cargaCardHTML(r, !r.recebido)).join('')}
+          ${blocoPendencias(g.cliente)}
         </div>
       </details>
     `;
@@ -1080,6 +1227,36 @@ function renderConsulta() {
 
   let html = `<div class="group-header">👥 Clientes OK: ${clientesOk}/${grupos.length}</div>`;
   html += grupos.map(renderClientGroup).join('');
+
+  // Clientes que não têm objeto neste dia, mas têm pendência de dias anteriores
+  const clientesDoDia = new Set(grupos.map(g => g.cliente));
+  const soPendencia = Object.keys(pendPorCliente)
+    .filter(c => !clientesDoDia.has(c))
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  if (soPendencia.length) {
+    html += `<div class="group-header faltando">⏰ Pendências de outros dias</div>`;
+    html += soPendencia.map(cliente => `
+      <details class="client-group">
+        <summary class="client-summary">
+          <div class="client-info">
+            <span style="font-size: 1.05rem">👤</span>
+            <span>${escHtml(cliente)}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            ${seloPendencias(cliente)}
+            <span class="client-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </span>
+          </div>
+        </summary>
+        <div class="client-content">
+          ${pendPorCliente[cliente].map(r => cargaCardHTML(r, true)).join('')}
+        </div>
+      </details>`).join('');
+  }
 
   el.innerHTML = html;
 }
