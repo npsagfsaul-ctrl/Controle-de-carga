@@ -662,6 +662,7 @@ body {
 }
 .log-resumo-sep { color: var(--text-3); }
 .log-resumo-alerta { color: var(--amber); }
+.log-resumo-erro   { color: var(--red); }
 .log-code { font-family: 'Courier New', monospace; font-weight: 700; color: var(--accent-2); flex: 0 0 auto; white-space: nowrap; }
 
 .log-cliente {

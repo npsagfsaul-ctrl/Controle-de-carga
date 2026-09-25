@@ -799,6 +799,16 @@ async function conferirManual() {
   await processarConferencia(code);
 }
 
+// Registra TODA leitura no histórico (inclusive as que deram erro), para depois
+// ser possível saber se um objeto chegou a ser lido mesmo sem virar recebido.
+// Se a tabela 'bipes' ainda não existir no banco, apenas ignora.
+async function registrarBipe(codigo, resultado, cliente = null, mensagem = null) {
+  if (!sb) return;
+  try {
+    await sb.from('bipes').insert({ codigo_rastreio: codigo, cliente, resultado, mensagem });
+  } catch { /* histórico é best effort: nunca atrapalha a conferência */ }
+}
+
 async function processarConferencia(code) {
   if (!sb) { showToast('⚠️ Configure o Supabase.'); openModal('modalConfig'); return; }
 
@@ -811,7 +821,11 @@ async function processarConferencia(code) {
     .order('data_agendada', { ascending: true })
     .limit(1);
 
-  if (error) { showToast('❌ Erro na consulta.'); return; }
+  if (error) {
+    registrarBipe(code, 'erro', null, 'Erro na consulta ao banco');
+    showToast('❌ Erro na consulta.');
+    return;
+  }
 
   if (!data || !data.length) {
     // Não encontrado como pendente — verifica se já foi recebido antes
@@ -827,11 +841,13 @@ async function processarConferencia(code) {
       beep('error');
       const dtReceb = formatDateBR(jaRecebido[0].data_recebimento?.slice(0,10) || '');
       setFeedback('err', '⚠️', 'Etiqueta já conferida!', `Possível objeto duplicado — esta etiqueta foi recebida em ${dtReceb} para ${jaRecebido[0].cliente}`);
+      registrarBipe(code, 'duplicado', jaRecebido[0].cliente, `já recebida em ${dtReceb}`);
       logEntry({ code, ok: false, msg: `⚠️ etiqueta duplicada? (já recebida em ${dtReceb})` });
       showToast(`⚠️ ${code} — ETIQUETA JÁ CONFERIDA (recebida ${dtReceb} • ${jaRecebido[0].cliente}). Possível duplicada!`);
     } else {
       beep('error');
       setFeedback('err', '❌', 'Não Cadastrado!', `Código: ${code} — Nenhum registro encontrado.`);
+      registrarBipe(code, 'nao_cadastrado', null, 'Nenhum registro encontrado');
       logEntry({ code, ok: false, msg: 'Não cadastrado' });
       showToast(`❌ ${code} — SEM REGISTRO no sistema`);
     }
@@ -852,8 +868,13 @@ async function processarConferencia(code) {
     .update({ recebido: true, data_recebimento: new Date().toISOString() })
     .eq('id', carga.id);
 
-  if (upErr) { showToast('❌ Erro ao atualizar.'); return; }
+  if (upErr) {
+    registrarBipe(code, 'erro', carga.cliente, 'Falha ao marcar como recebido');
+    showToast('❌ Erro ao atualizar.');
+    return;
+  }
 
+  registrarBipe(code, 'ok', carga.cliente, situacao);
   beep('success');
   const dataBR = formatDateBR(carga.data_agendada);
   if (situacao === 'antecipado') {
@@ -1001,8 +1022,10 @@ function logEntry(entry) {
 async function carregarLogHoje() {
   if (!sb) { renderLogHoje(); return; }
 
-  const start = todayISO() + 'T00:00:00';
-  const end   = todayISO() + 'T23:59:59';
+  // Limites do dia no fuso local (o banco guarda a hora em UTC)
+  const hoje  = todayISO();
+  const start = new Date(`${hoje}T00:00:00`).toISOString();
+  const end   = new Date(`${hoje}T23:59:59.999`).toISOString();
 
   const { data } = await sb
     .from('cargas')
@@ -1012,13 +1035,20 @@ async function carregarLogHoje() {
     .lte('data_recebimento', end)
     .order('data_recebimento', { ascending: false });
 
+  // Leituras do dia que NÃO viraram recebimento (não cadastrado, duplicada, falha)
+  const { data: erros } = await sb
+    .from('bipes')
+    .select('codigo_rastreio, cliente, resultado, mensagem, created_at')
+    .neq('resultado', 'ok')
+    .gte('created_at', start)
+    .lte('created_at', end)
+    .order('created_at', { ascending: false });
+
   const el = document.getElementById('logHoje');
-  if (!data?.length && !logMemory.length) {
+  if (!data?.length && !erros?.length && !logMemory.length) {
     el.innerHTML = '<div class="empty-card"><span>Nenhuma conferência hoje.</span></div>';
     return;
   }
-
-  const hoje = todayISO();
 
   // Selo para objeto lido hoje que estava previsto para outro dia
   const seloOutroDia = r => {
@@ -1029,23 +1059,49 @@ async function carregarLogHoje() {
       : `<span class="badge badge-blue log-badge" title="Está previsto para ${formatDateBR(r.data_agendada)}">⚡ para ${curta}</span>`;
   };
 
-  const html = (data || []).map(r => `
-    <div class="log-item ok">
-      <span class="log-icon">✅</span>
-      <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
-      <span class="log-cliente">${escHtml(r.cliente)}</span>
-      ${seloOutroDia(r)}
-      <span class="log-time">${formatTime(r.data_recebimento)}</span>
-    </div>`).join('');
+  const rotuloErro = {
+    nao_cadastrado: '❌ Não cadastrado',
+    duplicado:      '⚠️ Etiqueta já conferida',
+    erro:           '❌ Falha ao salvar',
+  };
 
-  // Resumo: quantos bipes são de hoje e quantos vieram de outra data
+  // Recebidos e leituras com erro na mesma linha do tempo
+  const linhas = [
+    ...(data || []).map(r => ({
+      tempo: r.data_recebimento,
+      html: `
+        <div class="log-item ok">
+          <span class="log-icon">✅</span>
+          <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
+          <span class="log-cliente">${escHtml(r.cliente)}</span>
+          ${seloOutroDia(r)}
+          <span class="log-time">${formatTime(r.data_recebimento)}</span>
+        </div>`,
+    })),
+    ...(erros || []).map(b => ({
+      tempo: b.created_at,
+      html: `
+        <div class="log-item err">
+          <span class="log-icon">${b.resultado === 'duplicado' ? '⚠️' : '❌'}</span>
+          <span class="log-code">${escHtml(b.codigo_rastreio)}</span>
+          <span class="log-cliente">${escHtml(b.cliente || b.mensagem || '')}</span>
+          <span class="badge badge-red log-badge">${rotuloErro[b.resultado] || b.resultado}</span>
+          <span class="log-time">${formatTime(b.created_at)}</span>
+        </div>`,
+    })),
+  ].sort((a, b) => new Date(b.tempo) - new Date(a.tempo));
+
+  const html = linhas.map(l => l.html).join('');
+
+  // Resumo: bipes do dia, quantos vieram de outra data e quantas leituras falharam
   const outroDia = (data || []).filter(r => r.data_agendada && r.data_agendada !== hoje);
-  const resumo = data?.length
+  const resumo = linhas.length
     ? `<div class="log-resumo">
-         <span>${data.length} bipe(s) hoje</span>
+         <span>${(data || []).length} recebido(s) hoje</span>
          <span class="log-resumo-sep">•</span>
-         <span>${data.length - outroDia.length} previsto(s) para hoje</span>
+         <span>${(data || []).length - outroDia.length} previsto(s) para hoje</span>
          ${outroDia.length ? `<span class="log-resumo-sep">•</span><span class="log-resumo-alerta">⏰ ${outroDia.length} de outro dia</span>` : ''}
+         ${erros?.length ? `<span class="log-resumo-sep">•</span><span class="log-resumo-erro">❌ ${erros.length} leitura(s) sem registro</span>` : ''}
        </div>`
     : '';
 

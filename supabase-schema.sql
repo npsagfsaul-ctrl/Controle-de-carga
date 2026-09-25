@@ -50,6 +50,31 @@ CREATE POLICY "cli_insert" ON clientes FOR INSERT WITH CHECK (true);
 CREATE POLICY "cli_update" ON clientes FOR UPDATE USING (true);
 CREATE POLICY "cli_delete" ON clientes FOR DELETE USING (true);
 
+-- ============================================================
+-- BIPES — histórico permanente de TODAS as leituras
+-- Guarda também as que deram erro (não cadastrado, etiqueta
+-- duplicada, falha ao salvar). Serve para descobrir depois se
+-- um objeto chegou a ser lido mesmo sem ficar como recebido.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS bipes (
+  id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  codigo_rastreio  TEXT NOT NULL,
+  cliente          TEXT,
+  resultado        TEXT NOT NULL,   -- ok | nao_cadastrado | duplicado | erro
+  mensagem         TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bipes_data      ON bipes(created_at);
+CREATE INDEX IF NOT EXISTS idx_bipes_codigo    ON bipes(codigo_rastreio);
+CREATE INDEX IF NOT EXISTS idx_bipes_resultado ON bipes(resultado);
+
+ALTER TABLE bipes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "bipes_select" ON bipes FOR SELECT USING (true);
+CREATE POLICY "bipes_insert" ON bipes FOR INSERT WITH CHECK (true);
+
 -- Semeia a tabela de clientes a partir dos clientes que já existem
 -- em cargas (executa sem erro mesmo se rodar mais de uma vez).
 INSERT INTO clientes (nome)
