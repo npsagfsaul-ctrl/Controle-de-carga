@@ -1598,39 +1598,7 @@ function renderConsulta() {
     `;
   };
 
-  // Bloco do topo: tudo que ainda não veio nesta data, agrupado por cliente
-  const faltantes = rows.filter(r => !r.recebido);
-  let html = '';
-  if (faltantes.length) {
-    const porCliente = {};
-    faltantes.forEach(r => (porCliente[r.cliente] = porCliente[r.cliente] || []).push(r));
-    const blocos = Object.keys(porCliente)
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-      .map(cliente => `
-        <div class="falta-cliente">
-          <div class="falta-cliente-nome">👤 ${escHtml(cliente)} <span class="badge badge-amber">${porCliente[cliente].length}</span></div>
-          <div class="falta-itens">
-            ${porCliente[cliente].map(r => `
-              <div class="falta-item">
-                <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
-                <span class="tipo-pill">${escHtml(r.tipo_servico)}</span>
-              </div>`).join('')}
-          </div>
-        </div>`).join('');
-
-    html += `
-      <details class="falta-card" open>
-        <summary class="falta-summary">
-          <span>⏳ Faltando nesta data</span>
-          <span class="badge badge-red">${faltantes.length}</span>
-        </summary>
-        <div class="falta-conteudo">${blocos}</div>
-      </details>`;
-  } else {
-    html += `<div class="pend-ok">✅ Nada faltando nesta data — todos os objetos foram bipados.</div>`;
-  }
-
-  html += `<div class="group-header">👥 Clientes OK: ${clientesOk}/${grupos.length}</div>`;
+  let html = `<div class="group-header">👥 Clientes OK: ${clientesOk}/${grupos.length}</div>`;
   html += grupos.map(renderClientGroup).join('');
 
   // Clientes que não têm objeto neste dia, mas têm pendência de dias anteriores

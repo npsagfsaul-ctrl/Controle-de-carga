@@ -553,54 +553,6 @@ body {
 .manual-scan-card { margin-bottom: 20px; }
 
 /* ── Log List ────────────────────────────────────────────── */
-/* ── Bloco "Faltando nesta data" (Consulta) ─────────────── */
-.falta-card {
-  background: var(--red-bg);
-  border: 1px solid rgba(239,68,68,0.35);
-  border-radius: var(--r);
-  margin-bottom: 16px;
-  overflow: hidden;
-}
-.falta-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px;
-  cursor: pointer;
-  list-style: none;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--red);
-}
-.falta-summary::-webkit-details-marker { display: none; }
-.falta-conteudo { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
-
-.falta-cliente {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 10px 12px;
-}
-.falta-cliente-nome {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 0.82rem; font-weight: 700; color: var(--text);
-  margin-bottom: 8px;
-}
-.falta-itens { display: flex; flex-direction: column; gap: 5px; }
-.falta-item {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 7px 10px;
-  background: var(--bg-input);
-  border-left: 3px solid var(--amber);
-  border-radius: var(--r-sm);
-}
-.falta-item .log-code { flex: 1; }
-
-@media (min-width: 601px) {
-  .falta-itens { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-}
-
 /* ── Alternador "Um objeto / Em lote" ───────────────────── */
 .modo-switch {
   display: flex;
