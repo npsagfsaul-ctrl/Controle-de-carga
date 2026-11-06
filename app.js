@@ -78,6 +78,10 @@ window.addEventListener('DOMContentLoaded', () => {
   // Checagem de remessas: data padrão hoje
   document.getElementById('chkData').value = hoje;
 
+  // Etiquetas: liberação cai por padrão no dia seguinte
+  document.getElementById('etqDataPrevista').value = amanhaISO();
+  document.getElementById('etqCodigos').addEventListener('input', atualizarContadorEtiquetas);
+
   // Seletores de cliente com busca e barra de rolagem (abrem sempre para baixo)
   SELECTS_CLIENTE.forEach(id => criarSelectBusca(document.getElementById(id)));
 
@@ -162,6 +166,7 @@ function switchTab(tabId) {
 
   // Load data when switching tabs
   if (tabId === 'tabCadastro')    carregarListaHoje();
+  if (tabId === 'tabEtiquetas')   carregarEtiquetas();
   if (tabId === 'tabConferencia') { carregarLogHoje(); carregarPendentesAnteriores(); }
   if (tabId === 'tabConsulta')    carregarConsulta();
 }
@@ -238,6 +243,13 @@ function popularSelectsClientes() {
     if (atual && clientesSugeridos.includes(atual)) selRelatorio.value = atual;
   }
 
+  const selEtiquetas = document.getElementById('etqCliente');
+  if (selEtiquetas) {
+    const atual = selEtiquetas.value;
+    selEtiquetas.innerHTML = `<option value="" disabled ${atual ? '' : 'selected'}>Selecione um cliente cadastrado...</option>` + options;
+    if (atual && clientesSugeridos.includes(atual)) selEtiquetas.value = atual;
+  }
+
   const listaChecagem = document.getElementById('listaClientesChk');
   if (listaChecagem) {
     listaChecagem.innerHTML = clientesSugeridos.map(c => `<option value="${escHtml(c)}"></option>`).join('');
@@ -252,7 +264,7 @@ function popularSelectsClientes() {
 // cobrindo a tela inteira). Este componente mostra a lista sempre para baixo,
 // com barra de rolagem e campo de busca. O <select> original continua no DOM,
 // escondido, guardando o valor — então o resto do código não muda.
-const SELECTS_CLIENTE = ['inpCliente', 'editCliente', 'relCliente'];
+const SELECTS_CLIENTE = ['inpCliente', 'editCliente', 'relCliente', 'etqCliente'];
 
 function criarSelectBusca(select) {
   const wrap = document.createElement('div');
@@ -707,6 +719,300 @@ function fecharScannerCadastro() {
       closeModal('modalScanCadastro');
     });
   } else { closeModal('modalScanCadastro'); }
+}
+
+// ─── ETIQUETAS DO DIA ─────────────────────────────────────────────────────────
+// Substitui a planilha do atendimento: as etiquetas que o cliente avisou vão
+// sendo lançadas durante o dia e ficam "aguardando". Só depois que o Operacional
+// fecha o dia e as etiquetas são vendidas elas são LIBERADAS e viram cargas.
+let etiquetasCache = [];
+let etqScanner = null;
+let etqScanCount = 0;
+
+// Extrai rastreios de um texto colado de qualquer jeito (WhatsApp, vírgula, lista)
+function extrairCodigos(texto) {
+  const achados = (texto || '').toUpperCase().match(/[A-Z]{2}\d{9}[A-Z]{2}/g) || [];
+  return [...new Set(achados)];
+}
+
+function amanhaISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function atualizarContadorEtiquetas() {
+  const el = document.getElementById('etqContador');
+  if (!el) return;
+  const n = extrairCodigos(document.getElementById('etqCodigos').value).length;
+  el.textContent = n ? `${n} código(s) encontrado(s)` : '';
+  el.className = 'form-hint' + (n ? ' etq-contador-ok' : '');
+}
+
+async function lancarEtiquetas(e) {
+  e.preventDefault();
+  if (!sb) { showToast('⚠️ Configure o Supabase primeiro.'); return; }
+
+  const cliente = resolverCliente(document.getElementById('etqCliente').value);
+  const tipo    = document.getElementById('etqTipo').value;
+  const codigos = extrairCodigos(document.getElementById('etqCodigos').value);
+
+  if (!cliente || !tipo) { showToast('⚠️ Selecione o cliente e o tipo de serviço.'); return; }
+  if (!codigos.length)   { showToast('⚠️ Nenhum código de rastreio encontrado no texto.'); return; }
+
+  const btn = document.getElementById('btnLancarEtiquetas');
+  btn.disabled = true;
+  btn.textContent = 'Lançando...';
+  showLoading(true, 'Conferindo os códigos...');
+
+  // Já lançados e ainda aguardando
+  const jaLancados = new Set();
+  const jaCadastrados = new Map(); // código → "cliente (data)"
+  for (let i = 0; i < codigos.length; i += 150) {
+    const parte = codigos.slice(i, i + 150);
+    const { data: etq } = await sb
+      .from('etiquetas').select('codigo_rastreio').eq('status', 'aguardando').in('codigo_rastreio', parte);
+    (etq || []).forEach(r => jaLancados.add(r.codigo_rastreio));
+
+    const { data: cgs } = await sb
+      .from('cargas').select('codigo_rastreio, cliente, data_agendada').in('codigo_rastreio', parte);
+    (cgs || []).forEach(r => jaCadastrados.set(r.codigo_rastreio, `${r.cliente} (${formatDateBR(r.data_agendada)})`));
+  }
+
+  const novos = codigos.filter(c => !jaLancados.has(c) && !jaCadastrados.has(c));
+
+  let erro = null;
+  for (let i = 0; i < novos.length; i += 200) {
+    const { error } = await sb.from('etiquetas').insert(
+      novos.slice(i, i + 200).map(c => ({ codigo_rastreio: c, cliente, tipo_servico: tipo }))
+    );
+    if (error) { erro = error; break; }
+  }
+
+  showLoading(false);
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg> Lançar Etiquetas`;
+
+  if (erro) {
+    showToast(erro.code === 'PGRST205'
+      ? '❌ A tabela "etiquetas" ainda não existe no banco. Rode o comando SQL primeiro.'
+      : '❌ Erro ao lançar: ' + erro.message);
+    return;
+  }
+
+  const ignorados = codigos.length - novos.length;
+  showToast(`✅ ${novos.length} etiqueta(s) lançada(s)${ignorados ? ` • ${ignorados} ignorada(s) por já existirem` : ''}.`);
+
+  if (jaCadastrados.size) {
+    const exemplos = [...jaCadastrados.entries()].slice(0, 3).map(([c, onde]) => `${c} → ${onde}`).join('\n');
+    alert(`${jaCadastrados.size} código(s) já estão cadastrados no Controle de Cargas e foram ignorados:\n\n${exemplos}${jaCadastrados.size > 3 ? '\n...' : ''}`);
+  }
+
+  // Mantém cliente e data; limpa só os códigos, para o próximo lote ser direto
+  document.getElementById('etqCodigos').value = '';
+  atualizarContadorEtiquetas();
+  carregarEtiquetas();
+}
+
+async function carregarEtiquetas() {
+  const el    = document.getElementById('listaEtiquetas');
+  const badge = document.getElementById('badgeEtiquetas');
+  const acoes = document.getElementById('etqAcoes');
+  if (!el) return;
+  if (!sb) { el.innerHTML = '<div class="empty-card"><span>Sem conexão com o banco.</span></div>'; return; }
+
+  const { data, error } = await sb
+    .from('etiquetas')
+    .select('*')
+    .eq('status', 'aguardando')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    etiquetasCache = [];
+    badge.textContent = '0';
+    acoes.style.display = 'none';
+    el.innerHTML = error.code === 'PGRST205'
+      ? '<div class="empty-card"><span>A tabela "etiquetas" ainda não existe no banco. Rode o comando SQL para ativar esta aba.</span></div>'
+      : '<div class="empty-card"><span>Erro ao carregar etiquetas.</span></div>';
+    return;
+  }
+
+  etiquetasCache = data || [];
+  badge.textContent = etiquetasCache.length;
+  acoes.style.display = etiquetasCache.length ? 'block' : 'none';
+
+  const campoData = document.getElementById('etqDataPrevista');
+  if (campoData && !campoData.value) campoData.value = amanhaISO();
+
+  if (!etiquetasCache.length) {
+    el.innerHTML = '<div class="empty-card"><span>Nenhuma etiqueta aguardando liberação.</span></div>';
+    return;
+  }
+
+  // Agrupa por cliente, mantendo a ordem de lançamento
+  const porCliente = {};
+  etiquetasCache.forEach(r => (porCliente[r.cliente] = porCliente[r.cliente] || []).push(r));
+
+  const hoje = todayISO();
+  el.innerHTML = Object.keys(porCliente)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    .map(cliente => {
+      const itens = porCliente[cliente];
+
+      // Resumo por tipo: "12 PAC • 3 SEDEX"
+      const porTipo = {};
+      itens.forEach(r => porTipo[r.tipo_servico] = (porTipo[r.tipo_servico] || 0) + 1);
+      const resumoTipos = Object.entries(porTipo).map(([t, n]) => `${n} ${t}`).join(' • ');
+
+      // Aviso de etiqueta parada de dias anteriores
+      const diasParados = itens
+        .map(r => Math.floor((new Date(hoje) - new Date(r.created_at.slice(0, 10))) / 86400000))
+        .reduce((a, b) => Math.max(a, b), 0);
+      const avisoParado = diasParados > 0
+        ? `<span class="badge badge-red" title="Lançada há ${diasParados} dia(s) e ainda não liberada">⏰ ${diasParados}d parada</span>`
+        : '';
+
+      return `
+        <details class="client-group" open>
+          <summary class="client-summary">
+            <div class="client-info">
+              <span style="font-size: 1.05rem">👤</span>
+              <span>${escHtml(cliente)}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              ${avisoParado}
+              <span class="badge badge-amber">${itens.length}</span>
+              <span class="client-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </span>
+            </div>
+          </summary>
+          <div class="client-content">
+            <div class="etq-barra">
+              <span class="etq-resumo">${escHtml(resumoTipos)}</span>
+              <div class="etq-botoes">
+                <button class="btn btn-ghost btn-xs" data-cliente="${escHtml(cliente)}" onclick="copiarCodigosEtiquetas(this.dataset.cliente)">📋 Copiar códigos</button>
+                <button class="btn btn-primary btn-xs" data-cliente="${escHtml(cliente)}" onclick="liberarEtiquetas(this.dataset.cliente)">✅ Liberar</button>
+              </div>
+            </div>
+            ${itens.map(r => `
+              <div class="etq-item">
+                <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
+                <span class="tipo-pill">${escHtml(r.tipo_servico)}</span>
+                <button class="edit-btn" onclick="excluirEtiqueta('${r.id}')" title="Excluir etiqueta lançada">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                </button>
+              </div>`).join('')}
+          </div>
+        </details>`;
+    }).join('');
+}
+
+async function excluirEtiqueta(id) {
+  if (!confirm('Excluir esta etiqueta lançada?')) return;
+  const { error } = await sb.from('etiquetas').delete().eq('id', id);
+  if (error) { showToast('❌ Erro ao excluir: ' + error.message); return; }
+  showToast('🗑️ Etiqueta excluída.');
+  carregarEtiquetas();
+}
+
+function copiarCodigosEtiquetas(cliente) {
+  const codigos = etiquetasCache.filter(r => r.cliente === cliente).map(r => r.codigo_rastreio);
+  if (!codigos.length) return;
+  navigator.clipboard.writeText(codigos.join('\n'))
+    .then(() => showToast(`📋 ${codigos.length} código(s) copiado(s).`))
+    .catch(() => showToast('❌ Não foi possível copiar.'));
+}
+
+// Libera as etiquetas (de um cliente ou de todos): elas viram cargas de verdade
+// com a data prevista escolhida e passam a valer para a bipagem.
+async function liberarEtiquetas(cliente) {
+  if (!sb) return;
+
+  const data = document.getElementById('etqDataPrevista').value;
+  if (!data) { showToast('⚠️ Informe a data prevista de chegada.'); return; }
+
+  const alvo = cliente ? etiquetasCache.filter(r => r.cliente === cliente) : etiquetasCache;
+  if (!alvo.length) { showToast('Nada para liberar.'); return; }
+
+  const quem = cliente ? `de ${cliente}` : 'de TODOS os clientes';
+  if (!confirm(`Liberar ${alvo.length} etiqueta(s) ${quem} para a bipagem do dia ${formatDateBR(data)}?`)) return;
+
+  showLoading(true, 'Liberando...');
+
+  // Ignora o que já estiver no Controle de Cargas (evita duplicar)
+  const codigos = alvo.map(r => r.codigo_rastreio);
+  const existentes = new Set();
+  for (let i = 0; i < codigos.length; i += 150) {
+    const { data: cgs } = await sb
+      .from('cargas').select('codigo_rastreio').in('codigo_rastreio', codigos.slice(i, i + 150));
+    (cgs || []).forEach(r => existentes.add(r.codigo_rastreio));
+  }
+
+  const novos = alvo.filter(r => !existentes.has(r.codigo_rastreio));
+
+  for (let i = 0; i < novos.length; i += 200) {
+    const { error } = await sb.from('cargas').insert(
+      novos.slice(i, i + 200).map(r => ({
+        codigo_rastreio: r.codigo_rastreio,
+        cliente: r.cliente,
+        tipo_servico: r.tipo_servico,
+        data_agendada: data,
+      }))
+    );
+    if (error) {
+      showLoading(false);
+      showToast('❌ Erro ao liberar: ' + error.message);
+      return;
+    }
+  }
+
+  // Marca como liberadas (inclusive as que já existiam em cargas)
+  const ids = alvo.map(r => r.id);
+  for (let i = 0; i < ids.length; i += 200) {
+    await sb.from('etiquetas')
+      .update({ status: 'liberado', data_prevista: data, liberado_em: new Date().toISOString() })
+      .in('id', ids.slice(i, i + 200));
+  }
+
+  showLoading(false);
+  const jaExistiam = alvo.length - novos.length;
+  showToast(`✅ ${novos.length} objeto(s) liberado(s) para ${formatDateBR(data)}${jaExistiam ? ` • ${jaExistiam} já estavam cadastrados` : ''}.`);
+
+  carregarEtiquetas();
+  carregarListaHoje();
+}
+
+// ─── SCANNER DE ETIQUETAS (bipagem contínua no lançamento) ───────────────────
+function abrirScannerEtiquetas() {
+  etqScanCount = 0;
+  document.getElementById('etqScanContador').textContent = '0 bipadas';
+  openModal('modalScanEtiquetas');
+  setTimeout(() => {
+    const config = { fps: 12, qrbox: { width: 240, height: 120 }, aspectRatio: 1.5 };
+    etqScanner = new Html5Qrcode('scannerEtiquetasViewport');
+    etqScanner.start({ facingMode: 'environment' }, config, (code) => {
+      const limpo = code.trim().toUpperCase();
+      const campo = document.getElementById('etqCodigos');
+      if (extrairCodigos(campo.value).includes(limpo)) return; // já está na lista
+      campo.value = (campo.value.trim() + '\n' + limpo).trim();
+      etqScanCount++;
+      document.getElementById('etqScanContador').textContent = `${etqScanCount} bipadas`;
+      atualizarContadorEtiquetas();
+      beep('success');
+    }, () => {}).catch(console.warn);
+  }, 300);
+}
+
+function fecharScannerEtiquetas() {
+  if (etqScanner) {
+    etqScanner.stop().catch(() => {}).finally(() => {
+      etqScanner = null;
+      closeModal('modalScanEtiquetas');
+    });
+  } else { closeModal('modalScanEtiquetas'); }
 }
 
 // ─── CONFERÊNCIA — CÂMERA ────────────────────────────────────────────────────
@@ -1211,6 +1517,10 @@ function renderConsulta() {
   const grupos = Object.keys(map).map(cliente => {
     const items     = map[cliente];
     const recebidos = items.filter(i => i.recebido).length;
+    // Dentro do cliente, quem ainda não veio aparece primeiro
+    items.sort((a, b) => (a.recebido === b.recebido)
+      ? a.codigo_rastreio.localeCompare(b.codigo_rastreio)
+      : (a.recebido ? 1 : -1));
     return { cliente, items, recebidos, total: items.length, ok: recebidos === items.length };
   });
 
@@ -1281,7 +1591,39 @@ function renderConsulta() {
     `;
   };
 
-  let html = `<div class="group-header">👥 Clientes OK: ${clientesOk}/${grupos.length}</div>`;
+  // Bloco do topo: tudo que ainda não veio nesta data, agrupado por cliente
+  const faltantes = rows.filter(r => !r.recebido);
+  let html = '';
+  if (faltantes.length) {
+    const porCliente = {};
+    faltantes.forEach(r => (porCliente[r.cliente] = porCliente[r.cliente] || []).push(r));
+    const blocos = Object.keys(porCliente)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map(cliente => `
+        <div class="falta-cliente">
+          <div class="falta-cliente-nome">👤 ${escHtml(cliente)} <span class="badge badge-amber">${porCliente[cliente].length}</span></div>
+          <div class="falta-itens">
+            ${porCliente[cliente].map(r => `
+              <div class="falta-item">
+                <span class="log-code">${escHtml(r.codigo_rastreio)}</span>
+                <span class="tipo-pill">${escHtml(r.tipo_servico)}</span>
+              </div>`).join('')}
+          </div>
+        </div>`).join('');
+
+    html += `
+      <details class="falta-card" open>
+        <summary class="falta-summary">
+          <span>⏳ Faltando nesta data</span>
+          <span class="badge badge-red">${faltantes.length}</span>
+        </summary>
+        <div class="falta-conteudo">${blocos}</div>
+      </details>`;
+  } else {
+    html += `<div class="pend-ok">✅ Nada faltando nesta data — todos os objetos foram bipados.</div>`;
+  }
+
+  html += `<div class="group-header">👥 Clientes OK: ${clientesOk}/${grupos.length}</div>`;
   html += grupos.map(renderClientGroup).join('');
 
   // Clientes que não têm objeto neste dia, mas têm pendência de dias anteriores

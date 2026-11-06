@@ -51,6 +51,35 @@ CREATE POLICY "cli_update" ON clientes FOR UPDATE USING (true);
 CREATE POLICY "cli_delete" ON clientes FOR DELETE USING (true);
 
 -- ============================================================
+-- ETIQUETAS — etiquetas que o cliente avisou que vai trazer
+-- Substitui a planilha do atendimento: o pessoal vai lançando
+-- durante o dia e, depois que o Operacional fecha o dia e as
+-- etiquetas são vendidas, elas são LIBERADAS e viram cargas.
+-- Enquanto estão 'aguardando' não aparecem na bipagem.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS etiquetas (
+  id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  codigo_rastreio  TEXT NOT NULL,
+  cliente          TEXT NOT NULL,
+  tipo_servico     TEXT NOT NULL CHECK (tipo_servico IN ('PAC', 'SEDEX', 'PAC MINI')),
+  status           TEXT NOT NULL DEFAULT 'aguardando',  -- aguardando | liberado
+  data_prevista    DATE,
+  liberado_em      TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_etiquetas_status  ON etiquetas(status);
+CREATE INDEX IF NOT EXISTS idx_etiquetas_codigo  ON etiquetas(codigo_rastreio);
+
+ALTER TABLE etiquetas ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "etq_select" ON etiquetas FOR SELECT USING (true);
+CREATE POLICY "etq_insert" ON etiquetas FOR INSERT WITH CHECK (true);
+CREATE POLICY "etq_update" ON etiquetas FOR UPDATE USING (true);
+CREATE POLICY "etq_delete" ON etiquetas FOR DELETE USING (true);
+
+-- ============================================================
 -- BIPES — histórico permanente de TODAS as leituras
 -- Guarda também as que deram erro (não cadastrado, etiqueta
 -- duplicada, falha ao salvar). Serve para descobrir depois se

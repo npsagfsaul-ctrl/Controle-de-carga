@@ -37,6 +37,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         Cadastro
       </button>
+      <button class="tab-btn" data-tab="tabEtiquetas"   onclick="switchTab('tabEtiquetas')"   role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        Etiquetas
+      </button>
       <button class="tab-btn" data-tab="tabConferencia" onclick="switchTab('tabConferencia')" role="tab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 20h.01M20 14h.01M20 20h.01M20 17h.01M17 14h.01"/></svg>
         Conferência
@@ -120,6 +124,79 @@
         <div class="empty-card">
           <span>Nenhum objeto cadastrado para hoje.</span>
         </div>
+      </div>
+    </section>
+
+    <!-- ══ TAB: ETIQUETAS DO DIA ═════════════════════════════ -->
+    <section id="tabEtiquetas" class="tab-panel" style="display:none">
+      <div class="panel-header">
+        <h2 class="panel-title">Etiquetas do Dia</h2>
+        <p class="panel-desc">Lance as etiquetas que o cliente avisou. Elas só entram na bipagem depois de liberadas.</p>
+      </div>
+
+      <form id="formEtiquetas" class="card form-card" onsubmit="lancarEtiquetas(event)" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="etqCliente">Cliente *</label>
+          <div class="input-with-action">
+            <select id="etqCliente" class="form-select" required>
+              <option value="" disabled selected>Selecione um cliente cadastrado...</option>
+            </select>
+            <button type="button" class="icon-btn-sm" onclick="abrirCadastroCliente()" title="Cadastrar novo cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="etqTipo">Tipo de Serviço *</label>
+          <select id="etqTipo" class="form-select" required>
+            <option value="" disabled selected>Selecione...</option>
+            <option value="PAC">PAC</option>
+            <option value="SEDEX">SEDEX</option>
+            <option value="PAC MINI">PAC MINI</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="etqCodigos">Etiquetas *</label>
+          <div class="input-with-action">
+            <textarea id="etqCodigos" class="form-input etq-textarea" placeholder="Cole, digite ou bipe os códigos..." autocomplete="off" required></textarea>
+            <button type="button" class="icon-btn-sm" onclick="abrirScannerEtiquetas()" title="Bipar etiquetas com a câmera">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h5v5h-5z"/></svg>
+            </button>
+          </div>
+          <p class="form-hint">Pode colar do jeito que veio (WhatsApp, lista, vírgula). Se puder, um código por linha.</p>
+          <p class="form-hint" id="etqContador"></p>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="btnLancarEtiquetas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg>
+          Lançar Etiquetas
+        </button>
+      </form>
+
+      <div class="section-header">
+        <h3 class="section-title">Aguardando Liberação</h3>
+        <span class="badge badge-amber" id="badgeEtiquetas">0</span>
+      </div>
+
+      <div class="card filter-card" id="etqAcoes" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="etqDataPrevista">Data prevista de chegada</label>
+            <input id="etqDataPrevista" class="form-input" type="date"/>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button class="btn btn-primary" onclick="liberarEtiquetas(null)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6L9 17l-5-5"/></svg>
+            Liberar Tudo para Bipagem
+          </button>
+        </div>
+      </div>
+
+      <div id="listaEtiquetas">
+        <div class="empty-card"><span>Nenhuma etiqueta aguardando liberação.</span></div>
       </div>
     </section>
 
@@ -435,6 +512,23 @@
       </div>
       <div id="scannerCadastroViewport" style="width:100%"></div>
       <p class="modal-desc" style="margin-top:12px;text-align:center">Posicione o código na câmera</p>
+    </div>
+  </div>
+
+  <!-- ══ MODAL: SCANNER ETIQUETAS (contínuo) ════════════════ -->
+  <div id="modalScanEtiquetas" class="modal-overlay" style="display:none" onclick="closeModalBg(event,'modalScanEtiquetas')">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 class="modal-title">📷 Bipar Etiquetas</h3>
+        <button class="icon-btn-sm" onclick="fecharScannerEtiquetas()">✕</button>
+      </div>
+      <div id="scannerEtiquetasViewport" style="width:100%"></div>
+      <p class="modal-desc" style="margin-top:12px;text-align:center">
+        Bipe uma etiqueta atrás da outra. <strong id="etqScanContador">0 bipadas</strong>
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="fecharScannerEtiquetas()">Concluir</button>
+      </div>
     </div>
   </div>
 
