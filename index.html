@@ -37,10 +37,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         Cadastro
       </button>
-      <button class="tab-btn" data-tab="tabEtiquetas"   onclick="switchTab('tabEtiquetas')"   role="tab">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-        Etiquetas
-      </button>
       <button class="tab-btn" data-tab="tabConferencia" onclick="switchTab('tabConferencia')" role="tab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M14 20h.01M20 14h.01M20 20h.01M20 17h.01M17 14h.01"/></svg>
         Conferência
@@ -53,10 +49,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
         Relatório
       </button>
-      <button class="tab-btn" data-tab="tabChecagem"   onclick="switchTab('tabChecagem')"   role="tab">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
-        Checagem
-      </button>
     </nav>
   </header>
 
@@ -66,9 +58,16 @@
     <section id="tabCadastro" class="tab-panel active">
       <div class="panel-header">
         <h2 class="panel-title">Cadastrar Objeto</h2>
-        <p class="panel-desc">Registre um novo objeto aguardado para entrega.</p>
+        <p class="panel-desc" id="cadastroDesc">Registre um novo objeto aguardado para entrega.</p>
       </div>
 
+      <!-- Alterna entre cadastro avulso e lançamento em lote -->
+      <div class="modo-switch" role="tablist">
+        <button class="modo-btn active" id="modoBtnUnico" onclick="setModoCadastro('unico')">Um objeto</button>
+        <button class="modo-btn" id="modoBtnLote" onclick="setModoCadastro('lote')">Em lote</button>
+      </div>
+
+      <div id="modoUnico">
       <form id="formCadastro" class="card form-card" onsubmit="cadastrarObjeto(event)" novalidate>
 
         <div class="form-group">
@@ -125,79 +124,75 @@
           <span>Nenhum objeto cadastrado para hoje.</span>
         </div>
       </div>
-    </section>
+      </div><!-- /modoUnico -->
 
-    <!-- ══ TAB: ETIQUETAS DO DIA ═════════════════════════════ -->
-    <section id="tabEtiquetas" class="tab-panel" style="display:none">
-      <div class="panel-header">
-        <h2 class="panel-title">Etiquetas do Dia</h2>
-        <p class="panel-desc">Lance as etiquetas que o cliente avisou. Elas só entram na bipagem depois de liberadas.</p>
-      </div>
-
-      <form id="formEtiquetas" class="card form-card" onsubmit="lancarEtiquetas(event)" novalidate>
-        <div class="form-group">
-          <label class="form-label" for="etqCliente">Cliente *</label>
-          <div class="input-with-action">
-            <select id="etqCliente" class="form-select" required>
-              <option value="" disabled selected>Selecione um cliente cadastrado...</option>
-            </select>
-            <button type="button" class="icon-btn-sm" onclick="abrirCadastroCliente()" title="Cadastrar novo cliente">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="etqTipo">Tipo de Serviço *</label>
-          <select id="etqTipo" class="form-select" required>
-            <option value="" disabled selected>Selecione...</option>
-            <option value="PAC">PAC</option>
-            <option value="SEDEX">SEDEX</option>
-            <option value="PAC MINI">PAC MINI</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="etqCodigos">Etiquetas *</label>
-          <div class="input-with-action">
-            <textarea id="etqCodigos" class="form-input etq-textarea" placeholder="Cole, digite ou bipe os códigos..." autocomplete="off" required></textarea>
-            <button type="button" class="icon-btn-sm" onclick="abrirScannerEtiquetas()" title="Bipar etiquetas com a câmera">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h5v5h-5z"/></svg>
-            </button>
-          </div>
-          <p class="form-hint">Pode colar do jeito que veio (WhatsApp, lista, vírgula). Se puder, um código por linha.</p>
-          <p class="form-hint" id="etqContador"></p>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-full" id="btnLancarEtiquetas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg>
-          Lançar Etiquetas
-        </button>
-      </form>
-
-      <div class="section-header">
-        <h3 class="section-title">Aguardando Liberação</h3>
-        <span class="badge badge-amber" id="badgeEtiquetas">0</span>
-      </div>
-
-      <div class="card filter-card" id="etqAcoes" style="display:none">
-        <div class="form-row">
+      <!-- ── Modo EM LOTE: etiquetas do dia + liberação ── -->
+      <div id="modoLote" style="display:none">
+        <form id="formEtiquetas" class="card form-card" onsubmit="lancarEtiquetas(event)" novalidate>
           <div class="form-group">
-            <label class="form-label" for="etqDataPrevista">Data prevista de chegada</label>
-            <input id="etqDataPrevista" class="form-input" type="date"/>
+            <label class="form-label" for="etqCliente">Cliente *</label>
+            <div class="input-with-action">
+              <select id="etqCliente" class="form-select" required>
+                <option value="" disabled selected>Selecione um cliente cadastrado...</option>
+              </select>
+              <button type="button" class="icon-btn-sm" onclick="abrirCadastroCliente()" title="Cadastrar novo cliente">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="etqTipo">Tipo de Serviço *</label>
+            <select id="etqTipo" class="form-select" required>
+              <option value="" disabled selected>Selecione...</option>
+              <option value="PAC">PAC</option>
+              <option value="SEDEX">SEDEX</option>
+              <option value="PAC MINI">PAC MINI</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="etqCodigos">Etiquetas *</label>
+            <div class="input-with-action">
+              <textarea id="etqCodigos" class="form-input etq-textarea" placeholder="Cole, digite ou bipe os códigos..." autocomplete="off" required></textarea>
+              <button type="button" class="icon-btn-sm" onclick="abrirScannerEtiquetas()" title="Bipar etiquetas com a câmera">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h5v5h-5z"/></svg>
+              </button>
+            </div>
+            <p class="form-hint">Pode colar do jeito que veio (WhatsApp, lista, vírgula). Se puder, um código por linha.</p>
+            <p class="form-hint" id="etqContador"></p>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full" id="btnLancarEtiquetas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg>
+            Lançar Etiquetas
+          </button>
+        </form>
+
+        <div class="section-header">
+          <h3 class="section-title">Aguardando Liberação</h3>
+          <span class="badge badge-amber" id="badgeEtiquetas">0</span>
+        </div>
+
+        <div class="card filter-card" id="etqAcoes" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="etqDataPrevista">Data prevista de chegada</label>
+              <input id="etqDataPrevista" class="form-input" type="date"/>
+            </div>
+          </div>
+          <div class="filter-actions">
+            <button class="btn btn-primary" onclick="liberarEtiquetas(null)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6L9 17l-5-5"/></svg>
+              Liberar Tudo para Bipagem
+            </button>
           </div>
         </div>
-        <div class="filter-actions">
-          <button class="btn btn-primary" onclick="liberarEtiquetas(null)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 6L9 17l-5-5"/></svg>
-            Liberar Tudo para Bipagem
-          </button>
-        </div>
-      </div>
 
-      <div id="listaEtiquetas">
-        <div class="empty-card"><span>Nenhuma etiqueta aguardando liberação.</span></div>
-      </div>
+        <div id="listaEtiquetas">
+          <div class="empty-card"><span>Nenhuma etiqueta aguardando liberação.</span></div>
+        </div>
+      </div><!-- /modoLote -->
     </section>
 
     <!-- ══ TAB: CONFERÊNCIA ══════════════════════════════════ -->
@@ -392,45 +387,6 @@
       </div>
     </section>
 
-    <!-- ══ TAB: CHECAGEM DE REMESSAS ═════════════════════════ -->
-    <section id="tabChecagem" class="tab-panel" style="display:none">
-      <div class="panel-header">
-        <h2 class="panel-title">Checagem de Remessas</h2>
-        <p class="panel-desc">Separe o dia do cliente entre objetos passados na balança e conferências manuais.</p>
-      </div>
-
-      <div class="card filter-card">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="chkCodigo">Código do Cliente</label>
-            <input id="chkCodigo" class="form-input" type="text" inputmode="numeric" placeholder="Ex: 3047" autocomplete="off" oninput="chkCodigoAlterado()"/>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="chkData">Data</label>
-            <input id="chkData" class="form-input" type="date"/>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="chkNome">Nome do Cliente</label>
-          <input id="chkNome" class="form-input" type="text" list="listaClientesChk" placeholder="Digite o nome do cliente..." autocomplete="off" oninput="chkNomeAlterado()"/>
-          <datalist id="listaClientesChk"></datalist>
-        </div>
-        <div class="filter-actions">
-          <button class="btn btn-primary" onclick="pesquisarChecagem()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            Pesquisar
-          </button>
-          <button class="btn btn-outline" onclick="exportarChecagem()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Baixar Excel
-          </button>
-        </div>
-      </div>
-
-      <div id="chkResultados">
-        <div class="empty-card"><span>Informe o cliente e a data e clique em Pesquisar.</span></div>
-      </div>
-    </section>
 
   </main>
 

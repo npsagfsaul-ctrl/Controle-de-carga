@@ -601,6 +601,36 @@ body {
   .falta-itens { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 }
 
+/* ── Alternador "Um objeto / Em lote" ───────────────────── */
+.modo-switch {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.modo-btn {
+  flex: 1;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--tr);
+}
+.modo-btn:hover { color: var(--text); }
+.modo-btn.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
 /* ── Etiquetas do dia ───────────────────────────────────── */
 .etq-textarea {
   flex: 1;
@@ -1247,69 +1277,6 @@ details[open] > .client-summary .client-icon {
 
 /* ─── FIM CALENDÁRIO ──────────────────────────────────────────────────────────── */
 
-/* ─── CHECAGEM DE REMESSAS ────────────────────────────────────────────────────── */
+/* Pills extras usadas nos resumos */
 .pill-blue  { border-top: 2px solid var(--accent); }
 .pill-amber { border-top: 2px solid var(--amber); }
-
-.chk-titulo {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 12px;
-}
-
-.chk-quadro-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.chk-quadro-sub {
-  font-size: 0.75rem;
-  color: var(--text-2);
-  margin: 2px 0 12px;
-}
-
-.chk-lista { display: flex; flex-direction: column; gap: 6px; }
-
-.chk-item {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 12px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--r-sm);
-}
-.chk-item.ok       { border-left-color: var(--green); }
-.chk-item.pendente { border-left-color: var(--amber); }
-
-.chk-code {
-  flex: 1 0 auto;
-  font-family: 'Courier New', monospace;
-  font-weight: 700;
-  color: var(--accent-2);
-  white-space: nowrap;
-}
-
-.chk-vazio { font-size: 0.8rem; color: var(--text-3); padding: 6px 0; }
-
-.chk-colar { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
-.chk-colar summary { cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--accent-2); }
-.chk-colar textarea {
-  display: block;
-  min-height: 110px;
-  margin: 10px 0;
-  resize: vertical;
-  font-family: 'Courier New', monospace;
-  font-size: 0.8rem;
-}
-
-@media (min-width: 601px) {
-  .chk-lista { display: grid; grid-template-columns: 1fr 1fr; }
-}
