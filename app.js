@@ -945,7 +945,7 @@ async function liberarEtiquetas(cliente) {
   if (!alvo.length) { showToast('Nada para liberar.'); return; }
 
   const quem = cliente ? `de ${cliente}` : 'de TODOS os clientes';
-  if (!confirm(`Liberar ${alvo.length} etiqueta(s) ${quem} para a bipagem do dia ${formatDateBR(data)}?`)) return;
+  if (!confirm(`Liberar ${alvo.length} etiqueta(s) ${quem} para a bipagem do dia ${formatDateBR(data)} (${diaDaSemana(data)})?`)) return;
 
   showLoading(true, 'Liberando...');
 
@@ -1942,6 +1942,13 @@ function showLoading(show, msg = 'Carregando...') {
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Dia da semana de uma data ISO (ajuda a perceber data errada, ex.: sábado)
+function diaDaSemana(iso) {
+  if (!iso) return '';
+  const dias = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+  return dias[new Date(`${iso}T00:00:00`).getDay()];
 }
 
 function formatDateBR(iso) {
