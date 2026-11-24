@@ -553,6 +553,59 @@ body {
 .manual-scan-card { margin-bottom: 20px; }
 
 /* ── Log List ────────────────────────────────────────────── */
+.aviso-data {
+  color: var(--amber) !important;
+  font-weight: 700;
+}
+
+/* ── Histórico de um objeto ─────────────────────────────── */
+.hist-box {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.hist-codigo {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--accent-2);
+  word-break: break-all;
+}
+.hist-resumo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  margin: 6px 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hist-linha { display: flex; flex-direction: column; gap: 6px; }
+
+.hist-evento {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+.hist-evento.ok   { border-left-color: var(--green); }
+.hist-evento.erro { border-left-color: var(--red); }
+
+.hist-icone { font-size: 1rem; flex-shrink: 0; }
+.hist-texto { flex: 1; min-width: 140px; }
+.hist-titulo { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.hist-detalhe { font-size: 0.76rem; color: var(--text-2); margin-top: 2px; }
+.hist-quando { font-size: 0.74rem; color: var(--text-3); white-space: nowrap; }
+
 /* ── Alternador "Um objeto / Em lote" ───────────────────── */
 .modo-switch {
   display: flex;

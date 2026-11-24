@@ -87,6 +87,17 @@ window.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') conferirManual();
   });
 
+  // Avisos de feriado/fim de semana já na abertura
+  ['inpData:inpAvisoData', 'etqDataPrevista:etqAvisoData'].forEach(par => {
+    const [campo, aviso] = par.split(':');
+    atualizarAvisoData(campo, aviso);
+  });
+
+  // Enter no campo de histórico já pesquisa
+  document.getElementById('histCodigo').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); buscarHistorico(); }
+  });
+
   // Volta para o último modo de cadastro usado (um objeto / em lote)
   setModoCadastro(localStorage.getItem('cc_modo_cadastro') || 'unico');
 
@@ -485,6 +496,7 @@ async function cadastrarObjeto(e) {
   }
 
   if (!confirmarDataPassada(data, 'A data esperada')) return;
+  if (!confirmarDataSuspeita(data, 'A data esperada')) return;
 
   const btn = document.getElementById('btnCadastrar');
   btn.disabled = true;
@@ -603,7 +615,8 @@ async function abrirEdicaoCarga(id) {
   document.getElementById('editCliente').value = data.cliente;
   document.getElementById('editTipo').value = data.tipo_servico;
   document.getElementById('editData').value = data.data_agendada;
-  
+  atualizarAvisoData('editData', 'editAvisoData');
+
   openModal('modalEditarCarga');
 }
 
@@ -627,6 +640,7 @@ async function salvarEdicao(e) {
   }
 
   if (!confirmarDataPassada(data, 'A data esperada')) return;
+  if (!confirmarDataSuspeita(data, 'A data esperada')) return;
 
   const btn = document.getElementById('btnSalvarEdicao');
   btn.disabled = true;
@@ -854,6 +868,7 @@ async function carregarEtiquetas() {
 
   const campoData = document.getElementById('etqDataPrevista');
   if (campoData && !campoData.value) campoData.value = amanhaISO();
+  atualizarAvisoData('etqDataPrevista', 'etqAvisoData');
 
   if (!etiquetasCache.length) {
     el.innerHTML = '<div class="empty-card"><span>Nenhuma etiqueta aguardando liberação.</span></div>';
@@ -949,6 +964,7 @@ async function liberarEtiquetas(cliente) {
   if (!alvo.length) { showToast('Nada para liberar.'); return; }
 
   if (!confirmarDataPassada(data, 'A data prevista de chegada')) return;
+  if (!confirmarDataSuspeita(data, 'A data prevista de chegada')) return;
 
   const quem = cliente ? `de ${cliente}` : 'de TODOS os clientes';
   if (!confirm(`Liberar ${alvo.length} etiqueta(s) ${quem} para a bipagem do dia ${formatDateBR(data)} (${diaDaSemana(data)})?`)) return;
@@ -1804,6 +1820,128 @@ function renderCalendario() {
   el.innerHTML = html;
 }
 
+// ─── HISTÓRICO DE UM OBJETO ───────────────────────────────────────────────────
+// Junta a linha do tempo das três tabelas: quando a etiqueta foi lançada,
+// quando foi liberada (e para que dia), e todas as leituras feitas nela.
+async function buscarHistorico() {
+  const el = document.getElementById('histResultado');
+  const codigo = document.getElementById('histCodigo').value.trim().toUpperCase();
+  if (!codigo) { el.innerHTML = ''; return; }
+  if (!sb) { showToast('⚠️ Sem conexão com o banco.'); return; }
+
+  document.getElementById('histCodigo').value = codigo;
+  showLoading(true, 'Buscando histórico...');
+
+  const [carga, etiqueta, leituras] = await Promise.all([
+    sb.from('cargas').select('*').eq('codigo_rastreio', codigo).order('created_at', { ascending: false }),
+    sb.from('etiquetas').select('*').eq('codigo_rastreio', codigo).order('created_at', { ascending: true }),
+    sb.from('bipes').select('*').eq('codigo_rastreio', codigo).order('created_at', { ascending: true }),
+  ]);
+
+  showLoading(false);
+
+  const cargas = carga.data || [];
+  const etqs   = etiqueta.data || [];
+  const bipes  = leituras.data || [];
+
+  if (!cargas.length && !etqs.length && !bipes.length) {
+    el.innerHTML = `<div class="empty-card"><span>Nenhum registro encontrado para ${escHtml(codigo)}.</span></div>`;
+    return;
+  }
+
+  // Monta os eventos da linha do tempo
+  const eventos = [];
+
+  etqs.forEach(e => {
+    eventos.push({
+      quando: e.created_at,
+      icone: '🏷️',
+      titulo: 'Etiqueta lançada em lote',
+      detalhe: `${e.cliente} • ${e.tipo_servico}`,
+    });
+    if (e.liberado_em) {
+      eventos.push({
+        quando: e.liberado_em,
+        icone: '✅',
+        titulo: 'Liberada para bipagem',
+        detalhe: `Prevista para ${formatDateBR(e.data_prevista)} (${diaDaSemana(e.data_prevista)})`,
+      });
+    }
+  });
+
+  cargas.forEach(c => {
+    // Cadastro avulso: não veio de etiqueta lançada
+    if (!etqs.length) {
+      eventos.push({
+        quando: c.created_at,
+        icone: '➕',
+        titulo: 'Cadastrado no Controle de Cargas',
+        detalhe: `${c.cliente} • ${c.tipo_servico} • previsto para ${formatDateBR(c.data_agendada)}`,
+      });
+    }
+    if (c.recebido && c.data_recebimento) {
+      const dia = c.data_recebimento.slice(0, 10);
+      let situacao = 'no dia previsto';
+      if (dia > c.data_agendada)      situacao = `atrasado (previsto ${formatDateBR(c.data_agendada)})`;
+      else if (dia < c.data_agendada) situacao = `antecipado (previsto ${formatDateBR(c.data_agendada)})`;
+      eventos.push({
+        quando: c.data_recebimento,
+        icone: '📦',
+        titulo: 'Recebido (bipado)',
+        detalhe: situacao,
+        ok: true,
+      });
+    }
+  });
+
+  const rotulos = {
+    ok:              ['✔️', 'Leitura registrada'],
+    nao_cadastrado:  ['❌', 'Leitura sem registro — objeto não estava cadastrado'],
+    duplicado:       ['⚠️', 'Leitura repetida — etiqueta já conferida'],
+    erro:            ['❌', 'Falha ao salvar a leitura'],
+  };
+  // A leitura que deu certo já aparece como "Recebido": não repete na linha
+  const horasRecebimento = cargas.filter(c => c.data_recebimento).map(c => new Date(c.data_recebimento).getTime());
+  bipes.forEach(b => {
+    const t = new Date(b.created_at).getTime();
+    if (b.resultado === 'ok' && horasRecebimento.some(h => Math.abs(h - t) < 10000)) return;
+    const [icone, titulo] = rotulos[b.resultado] || ['•', b.resultado];
+    eventos.push({ quando: b.created_at, icone, titulo, detalhe: b.mensagem || '', erro: b.resultado !== 'ok' });
+  });
+
+  eventos.sort((a, b) => new Date(a.quando) - new Date(b.quando));
+
+  // Situação atual
+  const atual = cargas[0];
+  const resumo = atual
+    ? `<div class="hist-resumo">
+         <div><strong>${escHtml(atual.cliente)}</strong> • ${escHtml(atual.tipo_servico)}</div>
+         <div>Previsto para ${formatDateBR(atual.data_agendada)} (${diaDaSemana(atual.data_agendada)})</div>
+         <span class="badge ${atual.recebido ? 'badge-green' : 'badge-amber'}">${atual.recebido ? '✓ Recebido' : '⏳ Aguardando'}</span>
+       </div>`
+    : `<div class="hist-resumo">
+         <div><strong>${escHtml(etqs[0]?.cliente || '')}</strong></div>
+         <span class="badge badge-amber">Etiqueta ainda não liberada</span>
+       </div>`;
+
+  el.innerHTML = `
+    <div class="hist-box">
+      <div class="hist-codigo">${escHtml(codigo)}</div>
+      ${resumo}
+      <div class="hist-linha">
+        ${eventos.map(ev => `
+          <div class="hist-evento ${ev.erro ? 'erro' : ev.ok ? 'ok' : ''}">
+            <span class="hist-icone">${ev.icone}</span>
+            <div class="hist-texto">
+              <div class="hist-titulo">${escHtml(ev.titulo)}</div>
+              ${ev.detalhe ? `<div class="hist-detalhe">${escHtml(ev.detalhe)}</div>` : ''}
+            </div>
+            <span class="hist-quando">${formatDateTime(ev.quando)}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
 // ─── RELATÓRIO POR CLIENTE ────────────────────────────────────────────────────
 let relatorioData = [];
 
@@ -1948,6 +2086,80 @@ function showLoading(show, msg = 'Carregando...') {
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ─── Feriados nacionais ───────────────────────────────────────────────────────
+// Datas fixas da lei + as móveis, que dependem da Páscoa (Carnaval, Sexta-feira
+// Santa e Corpus Christi). Carnaval e Corpus Christi são ponto facultativo, mas
+// na prática a agência não recebe objeto, então também avisamos.
+function domingoDePascoa(ano) {
+  const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(ano, mes - 1, dia);
+}
+
+function feriadosDoAno(ano) {
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const somarDias = (base, n) => { const d = new Date(base); d.setDate(d.getDate() + n); return d; };
+  const pascoa = domingoDePascoa(ano);
+
+  return {
+    [`${ano}-01-01`]: 'Confraternização Universal',
+    [`${ano}-04-21`]: 'Tiradentes',
+    [`${ano}-05-01`]: 'Dia do Trabalho',
+    [`${ano}-09-07`]: 'Independência',
+    [`${ano}-10-12`]: 'Nossa Senhora Aparecida',
+    [`${ano}-11-02`]: 'Finados',
+    [`${ano}-11-15`]: 'Proclamação da República',
+    [`${ano}-11-20`]: 'Consciência Negra',
+    [`${ano}-12-25`]: 'Natal',
+    [iso(somarDias(pascoa, -48))]: 'Carnaval (segunda)',
+    [iso(somarDias(pascoa, -47))]: 'Carnaval (terça)',
+    [iso(somarDias(pascoa, -2))]:  'Sexta-feira Santa',
+    [iso(somarDias(pascoa, 60))]:  'Corpus Christi',
+  };
+}
+
+const _feriadosCache = {};
+function feriadoNacional(iso) {
+  if (!iso) return null;
+  const ano = Number(iso.slice(0, 4));
+  if (!_feriadosCache[ano]) _feriadosCache[ano] = feriadosDoAno(ano);
+  return _feriadosCache[ano][iso] || null;
+}
+
+// Avisa feriado e fim de semana logo abaixo do campo de data, antes de salvar
+function avisoDeData(iso) {
+  const feriado = feriadoNacional(iso);
+  if (feriado) return { tipo: 'feriado', texto: `⚠️ ${formatDateBR(iso)} é feriado — ${feriado}` };
+  const dia = new Date(`${iso}T00:00:00`).getDay();
+  if (dia === 0 || dia === 6) return { tipo: 'fds', texto: `⚠️ ${formatDateBR(iso)} cai ${dia === 0 ? 'no domingo' : 'no sábado'}` };
+  return null;
+}
+
+function atualizarAvisoData(idCampo, idAviso) {
+  const campo = document.getElementById(idCampo);
+  const el    = document.getElementById(idAviso);
+  if (!campo || !el) return;
+  const aviso = avisoDeData(campo.value);
+  el.textContent = aviso ? aviso.texto : '';
+  el.className = 'form-hint' + (aviso ? ' aviso-data' : '');
+}
+
+// Confirma antes de salvar numa data de feriado ou fim de semana
+function confirmarDataSuspeita(data, oQue = 'Esta data') {
+  const aviso = avisoDeData(data);
+  if (!aviso) return true;
+  const motivo = aviso.tipo === 'feriado'
+    ? `é FERIADO — ${feriadoNacional(data)}`
+    : `cai ${new Date(`${data}T00:00:00`).getDay() === 0 ? 'no DOMINGO' : 'no SÁBADO'}`;
+  return confirm(`⚠️ ${oQue} é ${formatDateBR(data)} (${diaDaSemana(data)}) e ${motivo}.\n\nConfirma mesmo assim?`);
 }
 
 // Avisa quando a data escolhida já passou (erro comum de digitação).

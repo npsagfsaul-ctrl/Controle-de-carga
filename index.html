@@ -104,7 +104,8 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="inpData">Data Esperada *</label>
-            <input id="inpData" class="form-input" type="date" required/>
+            <input id="inpData" class="form-input" type="date" required oninput="atualizarAvisoData('inpData','inpAvisoData')"/>
+            <p class="form-hint" id="inpAvisoData"></p>
           </div>
         </div>
 
@@ -178,7 +179,8 @@
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="etqDataPrevista">Data prevista de chegada</label>
-              <input id="etqDataPrevista" class="form-input" type="date"/>
+              <input id="etqDataPrevista" class="form-input" type="date" oninput="atualizarAvisoData('etqDataPrevista','etqAvisoData')"/>
+              <p class="form-hint" id="etqAvisoData"></p>
             </div>
           </div>
           <div class="filter-actions">
@@ -335,8 +337,21 @@
     <!-- ══ TAB: RELATÓRIO POR CLIENTE ═══════════════════════ -->
     <section id="tabRelatorio" class="tab-panel" style="display:none">
       <div class="panel-header">
-        <h2 class="panel-title">Relatório por Cliente</h2>
-        <p class="panel-desc">Veja tudo o que foi cadastrado para um cliente e o status de cada objeto.</p>
+        <h2 class="panel-title">Relatório</h2>
+        <p class="panel-desc">Histórico completo de um objeto ou de um cliente.</p>
+      </div>
+
+      <!-- Histórico de um objeto -->
+      <div class="card filter-card">
+        <div class="form-group">
+          <label class="form-label" for="histCodigo">🔎 Histórico de um objeto</label>
+          <div class="input-with-action">
+            <input id="histCodigo" class="form-input" type="text" placeholder="Digite o código de rastreio..." autocomplete="off" autocapitalize="characters"/>
+            <button class="btn btn-primary btn-sm" onclick="buscarHistorico()">Buscar</button>
+          </div>
+          <p class="form-hint">Mostra quando a etiqueta foi lançada, liberada e bipada.</p>
+        </div>
+        <div id="histResultado"></div>
       </div>
 
       <div class="card filter-card">
@@ -523,7 +538,8 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="editData">Data Esperada *</label>
-            <input id="editData" class="form-input" type="date" required/>
+            <input id="editData" class="form-input" type="date" required oninput="atualizarAvisoData('editData','editAvisoData')"/>
+            <p class="form-hint" id="editAvisoData"></p>
           </div>
         </div>
 
