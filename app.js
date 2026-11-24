@@ -87,6 +87,10 @@ window.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') conferirManual();
   });
 
+  // O próprio calendário do navegador já não deixa escolher dia passado
+  document.getElementById('inpData').min = hoje;
+  document.getElementById('etqDataPrevista').min = hoje;
+
   // Avisos de feriado/fim de semana já na abertura
   ['inpData:inpAvisoData', 'etqDataPrevista:etqAvisoData'].forEach(par => {
     const [campo, aviso] = par.split(':');
@@ -495,7 +499,7 @@ async function cadastrarObjeto(e) {
     return;
   }
 
-  if (!confirmarDataPassada(data, 'A data esperada')) return;
+  if (!bloquearDataPassada(data, 'A data esperada')) return;
   if (!confirmarDataSuspeita(data, 'A data esperada')) return;
 
   const btn = document.getElementById('btnCadastrar');
@@ -963,7 +967,7 @@ async function liberarEtiquetas(cliente) {
   const alvo = cliente ? etiquetasCache.filter(r => r.cliente === cliente) : etiquetasCache;
   if (!alvo.length) { showToast('Nada para liberar.'); return; }
 
-  if (!confirmarDataPassada(data, 'A data prevista de chegada')) return;
+  if (!bloquearDataPassada(data, 'A data prevista de chegada')) return;
   if (!confirmarDataSuspeita(data, 'A data prevista de chegada')) return;
 
   const quem = cliente ? `de ${cliente}` : 'de TODOS os clientes';
@@ -2162,8 +2166,15 @@ function confirmarDataSuspeita(data, oQue = 'Esta data') {
   return confirm(`⚠️ ${oQue} é ${formatDateBR(data)} (${diaDaSemana(data)}) e ${motivo}.\n\nConfirma mesmo assim?`);
 }
 
-// Avisa quando a data escolhida já passou (erro comum de digitação).
-// Retorna false se a pessoa desistir no aviso.
+// Data que já passou: no cadastro e na liberação é sempre erro, então bloqueia.
+function bloquearDataPassada(data, oQue = 'Esta data') {
+  if (!data || data >= todayISO()) return true;
+  showToast(`❌ ${oQue} (${formatDateBR(data)}) já passou. Escolha hoje ou uma data futura.`);
+  return false;
+}
+
+// Na edição, puxar a data para trás é como se corrige um lançamento errado,
+// então aqui o sistema só avisa e deixa confirmar.
 function confirmarDataPassada(data, oQue = 'Esta data') {
   if (!data || data >= todayISO()) return true;
   return confirm(`⚠️ ${oQue} é ${formatDateBR(data)} (${diaDaSemana(data)}), que já passou.\n\nConfirma mesmo assim?`);
