@@ -484,6 +484,8 @@ async function cadastrarObjeto(e) {
     return;
   }
 
+  if (!confirmarDataPassada(data, 'A data esperada')) return;
+
   const btn = document.getElementById('btnCadastrar');
   btn.disabled = true;
   btn.textContent = 'Salvando...';
@@ -623,6 +625,8 @@ async function salvarEdicao(e) {
     }
     return;
   }
+
+  if (!confirmarDataPassada(data, 'A data esperada')) return;
 
   const btn = document.getElementById('btnSalvarEdicao');
   btn.disabled = true;
@@ -943,6 +947,8 @@ async function liberarEtiquetas(cliente) {
 
   const alvo = cliente ? etiquetasCache.filter(r => r.cliente === cliente) : etiquetasCache;
   if (!alvo.length) { showToast('Nada para liberar.'); return; }
+
+  if (!confirmarDataPassada(data, 'A data prevista de chegada')) return;
 
   const quem = cliente ? `de ${cliente}` : 'de TODOS os clientes';
   if (!confirm(`Liberar ${alvo.length} etiqueta(s) ${quem} para a bipagem do dia ${formatDateBR(data)} (${diaDaSemana(data)})?`)) return;
@@ -1942,6 +1948,13 @@ function showLoading(show, msg = 'Carregando...') {
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Avisa quando a data escolhida já passou (erro comum de digitação).
+// Retorna false se a pessoa desistir no aviso.
+function confirmarDataPassada(data, oQue = 'Esta data') {
+  if (!data || data >= todayISO()) return true;
+  return confirm(`⚠️ ${oQue} é ${formatDateBR(data)} (${diaDaSemana(data)}), que já passou.\n\nConfirma mesmo assim?`);
 }
 
 // Dia da semana de uma data ISO (ajuda a perceber data errada, ex.: sábado)
